@@ -28,3 +28,4 @@ git add -A
 git config user.email "nmckinley@google.com"
 git config user.name "Magic Module Bot"
 git commit -m "magic modules change happened here"
+git checkout -b magic_modules
