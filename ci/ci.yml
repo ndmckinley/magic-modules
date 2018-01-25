@@ -12,13 +12,6 @@ resources:
           branch: ci-server
           private_key: ((repo_key))
 
-    - name: terraform
-      type: git
-      source:
-          uri: git@github.com:ndmckinley/terraform-provider-google.git
-          branch: master
-          private_key: ((repo_key))
-
     - name: terraform-intermediate
       type: git
       source:
@@ -37,14 +30,16 @@ resources:
 jobs:
     - name: mm-generate
       plan:
-          - aggregate:
-                - get: magic-modules
-                - get: terraform
+          - get: magic-modules
+            params:
+                submodules: [build/terraform]
           - task: generate
             file: magic-modules/ci/generate.yml
           - put: terraform-intermediate
             params:
-                repository: magic-modules/build/terraform
+                repository: mm-output/build/terraform
+            get_params:
+                submodules: none
 
     - name: terraform-test
       plan:
