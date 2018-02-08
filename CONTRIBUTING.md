@@ -29,3 +29,4 @@ accept your pull requests.
 1. Ensure that your code is clear and comprehensible.
 1. Ensure that your code has an appropriate set of unit tests which all pass.
 1. Submit a pull request.
+1. Wait for the PR to be reviewed and approved.  The downstream modules will be updated and merged automatically.
