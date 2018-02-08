@@ -54,4 +54,5 @@
 	url = https://github.com/ansible/ansible.git
 [submodule "build/terraform"]
 	path = build/terraform
-	url = git@github.com:terraform-providers/terraform-provider-google.git
+	url = git@github.com:ndmckinley/terraform-provider-google.git
+	branch = 39a6685
