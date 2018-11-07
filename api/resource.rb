@@ -62,6 +62,7 @@ module Api
       attr_reader :update_verb
       attr_reader :input # If true, resource is not updatable as a whole unit
       attr_reader :min_version # Minimum API version this resource is in
+      attr_reader :exact_version # Exact API version string that this resource is in.
     end
 
     include Properties
@@ -263,6 +264,7 @@ module Api
         :update_verb, %i[POST PUT PATCH], :PUT, Symbol
       check_optional_property :input, :boolean
       check_optional_property :min_version, String
+      check_optional_property :exact_version, String
 
       set_variables(@parameters, :__resource)
       set_variables(@properties, :__resource)
@@ -285,6 +287,7 @@ module Api
 
     def exclude_if_not_in_version(version)
       @exclude ||= version < min_version
+      @exclude = version != exact_version unless exact_version.nil?
       @properties&.each { |p| p.exclude_if_not_in_version(version) }
       @parameters&.each { |p| p.exclude_if_not_in_version(version) }
 
@@ -370,6 +373,14 @@ module Api
         @__product.default_version
       else
         @__product.version_obj(@min_version)
+      end
+    end
+
+    def exact_version
+      if @exact_version.nil?
+        nil
+      else
+        @__product.version_obj(@exact_version)
       end
     end
 
