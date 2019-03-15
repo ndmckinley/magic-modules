@@ -16,6 +16,12 @@ resource_types:
           repository: gcr.io/magic-modules/concourse-git-resource
           tag: '1.0'
 
+    - name: experimental-github-pull-request
+      type: docker-image
+      source:
+          repository: gcr.io/magic-modules/concourse-github-pr-resource
+          tag: 'experiment'
+
     - name: github-pull-request
       type: docker-image
       source:
@@ -53,7 +59,7 @@ resources:
           community_only: true
 
     - name: magic-modules-experimental-prs
-      type: github-pull-request
+      type: experimental-github-pull-request
       source:
           repo: ndmckinley/magic-modules
           private_key: ((repo-key.private_key))
