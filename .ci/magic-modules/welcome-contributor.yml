@@ -8,10 +8,10 @@ image_resource:
         tag: '1.0'
 
 inputs:
-    - name: magic-modules-gcp
+    - name: magic-modules-experimental-prs
 
 outputs:
     - name: comment
 
 run:
-    path: magic-modules-gcp/.ci/magic-modules/welcome-contributor.sh
+    path: magic-modules-experimental-prs/.ci/magic-modules/welcome-contributor.sh
