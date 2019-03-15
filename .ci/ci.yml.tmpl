@@ -52,6 +52,14 @@ resources:
           access_token: ((github-account.password))
           community_only: true
 
+    - name: magic-modules-experimental-prs
+      type: github-pull-request
+      source:
+          repo: ndmckinley/magic-modules
+          private_key: ((repo-key.private_key))
+          access_token: ((github-account.password))
+          no_label: automerged
+
     - name: magic-modules-new-prs
       type: github-pull-request
       source:
@@ -113,6 +121,22 @@ jobs:
                 status: pending
                 path: magic-modules-new-external-prs
                 label: community
+                comment: comment/pr_comment
+                assignee_file: comment/assignee
+            get_params:
+                skip_clone: true
+
+    - name: nathan-tests-assignments
+      plan:
+          - get: magic-modules-experimental-prs
+            trigger: false
+          - task: write-nathan-message
+            file: magic-modules-experimental-prs/.ci/magic-modules/welcome-contributor.yml
+          - put: magic-modules-experimental-prs
+            params:
+                status: pending
+                path: magic-modules-experimental-prs
+                label: test
                 comment: comment/pr_comment
                 assignee_file: comment/assignee
             get_params:
