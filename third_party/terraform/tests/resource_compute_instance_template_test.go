@@ -517,7 +517,7 @@ func TestAccComputeInstanceTemplate_subnet_xpn(t *testing.T) {
 	var instanceTemplate compute.InstanceTemplate
 	org := getTestOrgFromEnv(t)
 	billingId := getTestBillingAccountFromEnv(t)
-	projectName := fmt.Sprintf("tf-xpntest-%d", time.Now().Unix())
+	projectName := fmt.Sprintf("tf-testxpn-%d", time.Now().Unix())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -1760,7 +1760,7 @@ resource "google_compute_instance_template" "foobar" {
 func testAccComputeInstanceTemplate_secondaryAliasIpRange(i string) string {
 	return fmt.Sprintf(`
 resource "google_compute_network" "inst-test-network" {
-  name = "inst-test-network-%s"
+  name = "tf-test-network-%s"
 }
 
 resource "google_compute_subnetwork" "inst-test-subnetwork" {

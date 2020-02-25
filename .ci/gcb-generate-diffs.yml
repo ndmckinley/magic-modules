@@ -36,16 +36,31 @@ steps:
     # we're used to from Concourse.
     - name: 'gcr.io/cloud-builders/git'
       args:
-          - checkout
+          - remote
+          - add
+          - head
+          - $_HEAD_REPO_URL
+
+    - name: 'gcr.io/cloud-builders/git'
+      args:
+          - fetch
+          - head
           - $_HEAD_BRANCH
+
+    - name: 'gcr.io/cloud-builders/git'
+      args:
+          - checkout
+          - origin/$_BASE_BRANCH
     - name: 'gcr.io/cloud-builders/git'
       id: merged
       args:
           - merge
-          - origin/$_BASE_BRANCH
+          - --no-ff
+          - head/$_HEAD_BRANCH
 
     - name: 'gcr.io/graphite-docker-images/downstream-builder'
       secretEnv: ["GITHUB_TOKEN"]
+      id: tpg-head
       waitFor: ["merged"]
       args:
           - 'head'
@@ -64,6 +79,7 @@ steps:
 
     - name: 'gcr.io/graphite-docker-images/downstream-builder'
       secretEnv: ["GITHUB_TOKEN"]
+      id: tpgb-head
       waitFor: ["merged"]
       args:
           - 'head'
@@ -104,7 +120,7 @@ steps:
       args:
           - 'head'
           - 'inspec'
-          - 'ga'
+          - 'beta'
           - $_PR_NUMBER
 
     - name: 'gcr.io/graphite-docker-images/downstream-builder'
@@ -113,7 +129,7 @@ steps:
       args:
           - 'base'
           - 'inspec'
-          - 'ga'
+          - 'beta'
           - $_PR_NUMBER
 
     - name: 'gcr.io/graphite-docker-images/downstream-builder'
@@ -132,15 +148,54 @@ steps:
           - 'base'
           - 'tf-conversion'
           - 'ga'
+          - $_PR_NUMBER
+
+    - name: 'gcr.io/graphite-docker-images/downstream-builder'
+      secretEnv: ["GITHUB_TOKEN"]
+      waitFor: ["merged"]
+      args:
+          - 'head'
+          - 'tf-oics'
+          - 'beta'
+          - $_PR_NUMBER
+
+    - name: 'gcr.io/graphite-docker-images/downstream-builder'
+      secretEnv: ["GITHUB_TOKEN"]
+      waitFor: ["merged"]
+      args:
+          - 'base'
+          - 'tf-oics'
+          - 'beta'
           - $_PR_NUMBER
 
     - name: 'gcr.io/graphite-docker-images/github-differ'
+      id: diff
       secretEnv: ["GITHUB_TOKEN"]
       args:
           - $_PR_NUMBER
 
+    - name: 'gcr.io/graphite-docker-images/changelog-checker'
+      secretEnv: ["GITHUB_TOKEN"]
+      waitFor: ["diff"]
+      args:
+          - $_PR_NUMBER
+
+    - name: 'gcr.io/graphite-docker-images/terraform-tester'
+      secretEnv: ["GITHUB_TOKEN"]
+      waitFor: ["diff"]
+      args:
+          - 'beta'
+          - $_PR_NUMBER
+
+    - name: 'gcr.io/graphite-docker-images/terraform-tester'
+      secretEnv: ["GITHUB_TOKEN"]
+      waitFor: ["diff"]
+      args:
+          - 'ga'
+          - $_PR_NUMBER
+
 options:
-    machineType: 'N1_HIGHCPU_8'
+    machineType: 'N1_HIGHCPU_32'
 
 secrets:
     - kmsKeyName: projects/graphite-docker-images/locations/global/keyRings/token-keyring/cryptoKeys/github-token

@@ -283,6 +283,45 @@ func TestAccComputeInstance_diskEncryption(t *testing.T) {
 	})
 }
 
+func TestAccComputeInstance_diskEncryptionRestart(t *testing.T) {
+	t.Parallel()
+
+	var instance compute.Instance
+	var instanceName = fmt.Sprintf("instance-test-%s", acctest.RandString(10))
+	bootEncryptionKey := "SGVsbG8gZnJvbSBHb29nbGUgQ2xvdWQgUGxhdGZvcm0="
+	bootEncryptionKeyHash := "esTuF7d4eatX4cnc4JsiEiaI+Rff78JgPhA/v1zxX9E="
+	diskNameToEncryptionKey := map[string]*compute.CustomerEncryptionKey{
+		fmt.Sprintf("instance-testd-%s", acctest.RandString(10)): {
+			RawKey: "Ym9vdDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=",
+			Sha256: "awJ7p57H+uVZ9axhJjl1D3lfC2MgA/wnt/z88Ltfvss=",
+		},
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckComputeInstanceDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComputeInstance_disks_encryption_restart(bootEncryptionKey, diskNameToEncryptionKey, instanceName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckComputeInstanceExists(
+						"google_compute_instance.foobar", &instance),
+					testAccCheckComputeInstanceDiskEncryptionKey("google_compute_instance.foobar", &instance, bootEncryptionKeyHash, diskNameToEncryptionKey),
+				),
+			},
+			{
+				Config: testAccComputeInstance_disks_encryption_restartUpdate(bootEncryptionKey, diskNameToEncryptionKey, instanceName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckComputeInstanceExists(
+						"google_compute_instance.foobar", &instance),
+					testAccCheckComputeInstanceDiskEncryptionKey("google_compute_instance.foobar", &instance, bootEncryptionKeyHash, diskNameToEncryptionKey),
+				),
+			},
+		},
+	})
+}
+
 func TestAccComputeInstance_kmsDiskEncryption(t *testing.T) {
 	t.Parallel()
 
@@ -2289,6 +2328,8 @@ resource "google_compute_instance" "foobar" {
   metadata = {
     foo = "bar"
   }
+
+  allow_stopping_for_update = true
 }
 `, diskNames[0], diskNameToEncryptionKey[diskNames[0]].RawKey,
 		diskNames[1], diskNameToEncryptionKey[diskNames[1]].RawKey,
@@ -2296,6 +2337,114 @@ resource "google_compute_instance" "foobar" {
 		"instance-testd-"+acctest.RandString(10),
 		instance, bootEncryptionKey,
 		diskNameToEncryptionKey[diskNames[0]].RawKey, diskNameToEncryptionKey[diskNames[1]].RawKey, diskNameToEncryptionKey[diskNames[2]].RawKey)
+}
+
+func testAccComputeInstance_disks_encryption_restart(bootEncryptionKey string, diskNameToEncryptionKey map[string]*compute.CustomerEncryptionKey, instance string) string {
+	diskNames := []string{}
+	for k := range diskNameToEncryptionKey {
+		diskNames = append(diskNames, k)
+	}
+	return fmt.Sprintf(`
+data "google_compute_image" "my_image" {
+  family  = "debian-9"
+  project = "debian-cloud"
+}
+
+resource "google_compute_disk" "foobar" {
+  name = "%s"
+  size = 10
+  type = "pd-ssd"
+  zone = "us-central1-a"
+
+  disk_encryption_key {
+    raw_key = "%s"
+  }
+}
+
+resource "google_compute_instance" "foobar" {
+  name         = "%s"
+  machine_type = "n1-standard-1"
+  zone         = "us-central1-a"
+
+  boot_disk {
+    initialize_params {
+      image = data.google_compute_image.my_image.self_link
+    }
+    disk_encryption_key_raw = "%s"
+  }
+
+  attached_disk {
+    source                  = google_compute_disk.foobar.self_link
+    disk_encryption_key_raw = "%s"
+  }
+
+  network_interface {
+    network = "default"
+  }
+
+  metadata = {
+    foo = "bar"
+  }
+
+  allow_stopping_for_update = true
+}
+`, diskNames[0], diskNameToEncryptionKey[diskNames[0]].RawKey,
+		instance, bootEncryptionKey,
+		diskNameToEncryptionKey[diskNames[0]].RawKey)
+}
+
+func testAccComputeInstance_disks_encryption_restartUpdate(bootEncryptionKey string, diskNameToEncryptionKey map[string]*compute.CustomerEncryptionKey, instance string) string {
+	diskNames := []string{}
+	for k := range diskNameToEncryptionKey {
+		diskNames = append(diskNames, k)
+	}
+	return fmt.Sprintf(`
+data "google_compute_image" "my_image" {
+  family  = "debian-9"
+  project = "debian-cloud"
+}
+
+resource "google_compute_disk" "foobar" {
+  name = "%s"
+  size = 10
+  type = "pd-ssd"
+  zone = "us-central1-a"
+
+  disk_encryption_key {
+    raw_key = "%s"
+  }
+}
+
+resource "google_compute_instance" "foobar" {
+  name         = "%s"
+  machine_type = "n1-standard-2"
+  zone         = "us-central1-a"
+
+  boot_disk {
+    initialize_params {
+      image = data.google_compute_image.my_image.self_link
+    }
+    disk_encryption_key_raw = "%s"
+  }
+
+  attached_disk {
+    source                  = google_compute_disk.foobar.self_link
+    disk_encryption_key_raw = "%s"
+  }
+
+  network_interface {
+    network = "default"
+  }
+
+  metadata = {
+    foo = "bar"
+  }
+
+  allow_stopping_for_update = true
+}
+`, diskNames[0], diskNameToEncryptionKey[diskNames[0]].RawKey,
+		instance, bootEncryptionKey,
+		diskNameToEncryptionKey[diskNames[0]].RawKey)
 }
 
 func testAccComputeInstance_disks_kms(pid string, bootEncryptionKey string, diskNameToEncryptionKey map[string]*compute.CustomerEncryptionKey, instance string) string {
@@ -2897,7 +3046,7 @@ data "google_compute_image" "my_image" {
 }
 
 resource "google_compute_network" "inst-test-network" {
-  name = "inst-test-network-%s"
+  name = "tf-test-network-%s"
 
   auto_create_subnetworks = true
 }
@@ -2930,7 +3079,7 @@ data "google_compute_image" "my_image" {
 }
 
 resource "google_compute_network" "inst-test-network" {
-  name = "inst-test-network-%s"
+  name = "tf-test-network-%s"
 
   auto_create_subnetworks = false
 }
@@ -3003,7 +3152,7 @@ resource "google_compute_shared_vpc_service_project" "service_project" {
 }
 
 resource "google_compute_network" "inst-test-network" {
-  name    = "inst-test-network-%s"
+  name    = "tf-test-network-%s"
   project = google_compute_shared_vpc_host_project.host_project.project
 
   auto_create_subnetworks = false
@@ -3047,7 +3196,7 @@ data "google_compute_image" "my_image" {
 }
 
 resource "google_compute_network" "inst-test-network" {
-  name = "inst-test-network-%s"
+  name = "tf-test-network-%s"
 }
 
 resource "google_compute_subnetwork" "inst-test-subnetwork" {
@@ -3085,7 +3234,7 @@ data "google_compute_image" "my_image" {
 }
 
 resource "google_compute_network" "inst-test-network" {
-  name = "inst-test-network-%s"
+  name = "tf-test-network-%s"
 }
 
 resource "google_compute_subnetwork" "inst-test-subnetwork" {

@@ -13,24 +13,29 @@
 
 --- !ruby/object:Provider::Terraform::Config
 overrides: !ruby/object:Overrides::ResourceOverrides
+  Instance: !ruby/object:Overrides::Terraform::ResourceOverride
+    exclude_resource: true
+    exclude: true
   AppProfile: !ruby/object:Overrides::Terraform::ResourceOverride
     id_format: "projects/{{project}}/instances/{{instance}}/appProfiles/{{app_profile_id}}"
     import_format: ["projects/{{project}}/instances/{{instance}}/appProfiles/{{app_profile_id}}"]
+    # This resource is a child resource (requires an instance in the URL)
+    skip_sweeper: true
     examples:
       - !ruby/object:Provider::Terraform::Examples
         name: "bigtable_app_profile_multicluster"
         primary_resource_id: "ap"
         vars:
-          instance_name: "tf-test-instance-"
-          app_profile_name: "tf-test-profile-"
+          instance_name: "bt-instance"
+          app_profile_name: "bt-profile"
         ignore_read_extra:
           - "ignore_warnings"
       - !ruby/object:Provider::Terraform::Examples
         name: "bigtable_app_profile_singlecluster"
         primary_resource_id: "ap"
         vars:
-          instance_name: "tf-test-instance-"
-          app_profile_name: "tf-test-profile-"
+          instance_name: "bt-instance"
+          app_profile_name: "bt-profile"
         ignore_read_extra:
           - "ignore_warnings"
     properties:

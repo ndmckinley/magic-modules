@@ -207,6 +207,7 @@ var schemaNodeConfig = &schema.Schema{
 			"workload_metadata_config": {
 <% if version.nil? || version == 'ga' -%>
 				Removed: "This field is in beta. Use it in the the google-beta provider instead. See https://terraform.io/docs/providers/google/guides/provider_versions.html for more details.",
+				Computed: true,
 <% end -%>
 				Type:       schema.TypeList,
 				Optional:   true,
@@ -227,6 +228,7 @@ var schemaNodeConfig = &schema.Schema{
 			"sandbox_config": {
 <% if version.nil? || version == 'ga' -%>
 				Removed: "This field is in beta. Use it in the the google-beta provider instead. See https://terraform.io/docs/providers/google/guides/provider_versions.html for more details.",
+				Computed: true,
 <% end -%>
 				Type:       schema.TypeList,
 				Optional:   true,
@@ -242,6 +244,14 @@ var schemaNodeConfig = &schema.Schema{
 					},
 				},
 			},
+
+<% unless version == 'ga' -%>
+			"boot_disk_kms_key": {
+				Type:       schema.TypeString,
+				Optional:   true,
+				ForceNew:   true,
+			},
+<% end -%>
 		},
 	},
 }
@@ -328,7 +338,9 @@ func expandNodeConfig(v interface{}) *containerBeta.NodeConfig {
 		tagsList := v.([]interface{})
 		tags := []string{}
 		for _, v := range tagsList {
-			tags = append(tags, v.(string))
+			if v != nil {
+				tags = append(tags, v.(string))
+			}
 		}
 		nc.Tags = tags
 	}
@@ -377,6 +389,10 @@ func expandNodeConfig(v interface{}) *containerBeta.NodeConfig {
 			SandboxType: conf["sandbox_type"].(string),
 		}
 	}
+
+	if v, ok := nodeConfig["boot_disk_kms_key"]; ok {
+		nc.BootDiskKmsKey = v.(string)
+	}
 <% end -%>
 
 	return nc
@@ -407,6 +423,7 @@ func flattenNodeConfig(c *containerBeta.NodeConfig) []map[string]interface{} {
 <% unless version == 'ga' -%>
 		"workload_metadata_config": flattenWorkloadMetadataConfig(c.WorkloadMetadataConfig),
 		"sandbox_config": 			flattenSandboxConfig(c.SandboxConfig),
+		"boot_disk_kms_key": 		c.BootDiskKmsKey,
 <% end -%>
 	})
 

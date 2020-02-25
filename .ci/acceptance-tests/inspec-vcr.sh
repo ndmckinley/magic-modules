@@ -26,7 +26,7 @@ export VCR_MODE=all
 # Running other controls may cause caching issues due to underlying clients caching responses
 rm build/inspec/test/integration/verify/controls/*
 bundle install
-bundle exec compiler -a -e inspec -o "build/inspec/"
+bundle exec compiler -a -e inspec -o "build/inspec/" -v beta
 cp templates/inspec/vcr_config.rb build/inspec
 
 pushd build/inspec
@@ -42,9 +42,18 @@ function cleanup {
 	bundle exec rake test:cleanup_integration_tests
 }
 
-
 export INSPEC_DIR=${PWD}
 trap cleanup EXIT
-bundle exec rake test:integration
+
+seed=$RANDOM
+bundle exec rake test:init_workspace
+# Seed plan_integration_tests so VCR cassettes work with random resource suffixes
+bundle exec rake test:plan_integration_tests[$seed]
+bundle exec rake test:setup_integration_tests
+bundle exec rake test:run_integration_tests
+bundle exec rake test:cleanup_integration_tests
+
+echo $seed > inspec-cassettes/seed.txt
+
 gsutil -m cp inspec-cassettes/* gs://magic-modules-inspec-bucket/$PR_ID/inspec-cassettes/
 popd

@@ -27,6 +27,7 @@ overrides: !ruby/object:Overrides::ResourceOverrides
           alert_policy_display_name: "My Alert Policy"
     custom_code: !ruby/object:Provider::Terraform::CustomCode
       custom_import: templates/terraform/custom_import/self_link_as_name.erb
+      decoder: 'templates/terraform/decoders/alert_policy_removed_fields.go.erb'
       post_create: templates/terraform/post_create/set_computed_name.erb
       extra_schema_entry: templates/terraform/extra_schema_entry/alert_policy.erb
 
@@ -82,7 +83,7 @@ overrides: !ruby/object:Overrides::ResourceOverrides
           to avoid a diff, Terraform will use the state value if it appears
           that the obfuscated value matches the state value in
           length/unobfuscated characters. However, Terraform will not detect a
-          a diff if the obfuscated portion of the value was changed outside of
+          diff if the obfuscated portion of the value was changed outside of
           Terraform.
         custom_flatten: "templates/terraform/custom_flatten/monitoring_obfuscated_labels.go.erb"
 

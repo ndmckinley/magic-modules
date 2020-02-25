@@ -38,18 +38,21 @@ class <%= object.__product.name.camelize(:upper) -%><%= object.name -%> < GcpRes
 
 <% end -%>
 
-<% if object.nested_query.nil? -%>
+<% if !object.singular_custom_constructor.nil? -%>
+<%= indent(compile(object.singular_custom_constructor), 2) -%>
+
+<% elsif object.nested_query.nil? -%>
   def initialize(params)
     super(params.merge({ use_http_transport: true }))
     @params = params
-    @fetched = @connection.fetch(product_url, resource_base_url, params, 'Get')
+    @fetched = @connection.fetch(product_url(params[:beta]), resource_base_url, params, 'Get')
     parse unless @fetched.nil?
   end
 <% else # object.nested_query.nil? -%>
   def initialize(params)
     super(params.merge({ use_http_transport: true }))
     @params = params
-    fetched = @connection.fetch(product_url, resource_base_url, params, 'Get')
+    fetched = @connection.fetch(product_url(params[:beta]), resource_base_url, params, 'Get')
     @fetched = unwrap(fetched, params)
     parse unless @fetched.nil?
   end
@@ -64,7 +67,7 @@ class <%= object.__product.name.camelize(:upper) -%><%= object.name -%> < GcpRes
   end
 
   def unwrap(fetched, params)
-    fetched[collection_item].find { |result| identity.all? { |id| result[id.to_sym] == params[id] } }
+    fetched[collection_item].find { |result| identity.all? { |id| result[id] == params[id.to_sym] } }
   end
 <% end # object.nested_query.nil? -%>
 
@@ -76,11 +79,13 @@ class <%= object.__product.name.camelize(:upper) -%><%= object.name -%> < GcpRes
 -%>
 <%= lines(indent(parse_code, 4)) -%>
   end
+<% if time_prop?(object.all_user_properties) -%>
 
   # Handles parsing RFC3339 time string
   def parse_time_string(time_string)
     time_string ? Time.parse(time_string) : nil
   end
+<% end # has_time_prop -%>
 
   def exists?
     !@fetched.nil?
@@ -95,14 +100,12 @@ best_guess_identifier = extract_identifiers(individual_url).last
   end
 <% unless object&.additional_functions.nil? -%>
 
-<%= lines(indent(object.additional_functions, 2)) -%>
+<%= lines(indent(compile(object.additional_functions), 2)) -%>
 <% end -%>
 
   private
 
-  def product_url
-    '<%= object.product_url || object.__product.base_url -%>'
-  end
+<%= compile('templates/inspec/product_url.erb') -%>
 
 <% url = object.self_link || object.base_url + '/{{name}}' -%>
 <% url_params = extract_identifiers(individual_url) -%>

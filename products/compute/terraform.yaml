@@ -64,6 +64,8 @@ overrides: !ruby/object:Overrides::ResourceOverrides
           If it is not provided, the provider region is used.
       subnetwork: !ruby/object:Overrides::Terraform::PropertyOverride
         default_from_api: true
+      status: !ruby/object:Overrides::Terraform::PropertyOverride
+        exclude: true
     docs: !ruby/object:Provider::Terraform::Docs
       attributes: |
           * `address` - The IP of the created resource.
@@ -260,24 +262,34 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         name: "region_backend_service_basic"
         primary_resource_id: "default"
         vars:
-          region_backend_service_name: "region-backend-service"
-          health_check_name: "health-check"
+          region_backend_service_name: "region-service"
+          health_check_name: "rbs-health-check"
       - !ruby/object:Provider::Terraform::Examples
         name: "region_backend_service_ilb_round_robin"
         min_version: beta
         primary_resource_id: "default"
         vars:
-          region_backend_service_name: "region-backend-service"
-          health_check_name: "health-check"
+          region_backend_service_name: "region-service"
+          health_check_name: "rbs-health-check"
       - !ruby/object:Provider::Terraform::Examples
         name: "region_backend_service_ilb_ring_hash"
         min_version: beta
         primary_resource_id: "default"
         vars:
-          region_backend_service_name: "region-backend-service"
-          health_check_name: "health-check"
+          region_backend_service_name: "region-service"
+          health_check_name: "rbs-health-check"
+      - !ruby/object:Provider::Terraform::Examples
+        name: "region_backend_service_balancing_mode"
+        min_version: beta
+        primary_resource_id: "default"
+        vars:
+          region_backend_service_name: "region-service"
+          rigm_name: "rbs-rigm"
+          region_health_check_name: "rbs-health-check"
+          network_name: "rbs-net"
     custom_code: !ruby/object:Provider::Terraform::CustomCode
-      constants: 'templates/terraform/constants/migrate_state_noop.go.erb'
+      constants: templates/terraform/constants/region_backend_service.go.erb
+      encoder: templates/terraform/encoders/region_backend_service.go.erb
       resource_definition: 'templates/terraform/resource_definition/region_backend_service.go.erb'
     properties:
       region: !ruby/object:Overrides::Terraform::PropertyOverride
@@ -294,7 +306,7 @@ overrides: !ruby/object:Overrides::ResourceOverrides
       backends.group: !ruby/object:Overrides::Terraform::PropertyOverride
         diff_suppress_func: 'compareSelfLinkRelativePaths'
         custom_flatten: templates/terraform/custom_flatten/guard_self_link.go.erb
-      backends.capacityScaler: !ruby/object:Overrides::Terraform::PropertyOverride
+      backends.failover: !ruby/object:Overrides::Terraform::PropertyOverride
         default_from_api: true
       connectionDraining: !ruby/object:Overrides::Terraform::PropertyOverride
         flatten_object: true
@@ -314,6 +326,8 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         default_from_api: true
       timeoutSec: !ruby/object:Overrides::Terraform::PropertyOverride
         default_from_api: true
+  RegionInstanceGroupManager: !ruby/object:Overrides::Terraform::ResourceOverride
+    exclude: true
   BackendServiceSignedUrlKey: !ruby/object:Overrides::Terraform::ResourceOverride
     exclude_import: true
     exclude_validator: true
@@ -342,6 +356,18 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         Because the API does not return the sensitive key value,
         we cannot confirm or reverse changes to a key outside of Terraform.
   DiskResourcePolicyAttachment: !ruby/object:Overrides::Terraform::ResourceOverride
+    description: |
+      Adds existing resource policies to a disk. You can only add one policy
+      which will be applied to this disk for scheduling snapshot creation.
+
+      ~> **Note:** This resource does not support regional disks (`google_compute_region_disk`).
+    examples:
+      - !ruby/object:Provider::Terraform::Examples
+        name: "disk_resource_policy_attachment_basic"
+        primary_resource_id: "attachment"
+        vars:
+          disk_name: "my-disk"
+          policy_name: "my-resource-policy"
     id_format: "{{project}}/{{zone}}/{{disk}}/{{name}}"
     custom_code: !ruby/object:Provider::Terraform::CustomCode
       encoder: templates/terraform/encoders/compute_disk_resource_policies_attachment.go.erb
@@ -494,7 +520,6 @@ overrides: !ruby/object:Overrides::ResourceOverrides
       logConfig: !ruby/object:Overrides::Terraform::PropertyOverride
         flatten_object: true
       logConfig.enableLogging: !ruby/object:Overrides::Terraform::PropertyOverride
-        api_name: enable
         send_empty_value: true
       name: !ruby/object:Overrides::Terraform::PropertyOverride
         validation: !ruby/object:Provider::Terraform::Validation
@@ -539,6 +564,18 @@ overrides: !ruby/object:Overrides::ResourceOverrides
           forwarding_rule_name: "website-forwarding-rule"
           backend_name: "website-backend"
           network_name: "website-net"
+      - !ruby/object:Provider::Terraform::Examples
+        name: "forwarding_rule_http_lb"
+        min_version: 'beta'
+        primary_resource_id: "default"
+        vars:
+          forwarding_rule_name: "website-forwarding-rule"
+          region_target_http_proxy_name: "website-proxy"
+          region_url_map_name: "website-map"
+          region_backend_service_name: "website-backend"
+          region_health_check_name: "website-hc"
+          network_name: "website-net"
+          fw_name: "website-fw"
     custom_code: !ruby/object:Provider::Terraform::CustomCode
       post_create: templates/terraform/post_create/labels.erb
       extra_schema_entry: templates/terraform/extra_schema_entry/forwarding_rule.erb
@@ -880,7 +917,7 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         primary_resource_id: "default"
         vars:
           instance_name: "my-instance"
-        primary_resource_name: "fmt.Sprintf(\"my-instance%s\", context[\"random_suffix\"])"
+        primary_resource_name: "fmt.Sprintf(\"tf-test-my-instance%s\", context[\"random_suffix\"])"
   InstanceGroup: !ruby/object:Overrides::Terraform::ResourceOverride
     exclude: true
   InstanceGroupManager: !ruby/object:Overrides::Terraform::ResourceOverride
@@ -888,6 +925,14 @@ overrides: !ruby/object:Overrides::ResourceOverrides
   InstanceTemplate: !ruby/object:Overrides::Terraform::ResourceOverride
     exclude: true
   InterconnectAttachment: !ruby/object:Overrides::Terraform::ResourceOverride
+    examples:
+      - !ruby/object:Provider::Terraform::Examples
+        name: "interconnect_attachment_basic"
+        primary_resource_id: "on_prem"
+        skip_test: true
+        vars:
+          interconnect_attachment_name: "on-prem-attachment"
+          router_name: "router"
     properties:
       id: !ruby/object:Overrides::Terraform::PropertyOverride
         exclude: true
@@ -907,14 +952,10 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         default_from_api: true
       vlanTag8021q: !ruby/object:Overrides::Terraform::PropertyOverride
         default_from_api: true
-    examples:
-      - !ruby/object:Provider::Terraform::Examples
-        name: "interconnect_attachment_basic"
-        primary_resource_id: "on_prem"
-        skip_test: true
-        vars:
-          interconnect_attachment_name: "on-prem-attachment"
-          router_name: "router"
+    custom_code: !ruby/object:Provider::Terraform::CustomCode
+      constants: templates/terraform/constants/interconnect_attachment.go.erb
+      post_create: templates/terraform/post_create/interconnect_attachment.go.erb
+      pre_delete: templates/terraform/pre_delete/interconnect_attachment.go.erb
   License: !ruby/object:Overrides::Terraform::ResourceOverride
     exclude: true
   MachineType: !ruby/object:Overrides::Terraform::ResourceOverride
@@ -1015,6 +1056,33 @@ overrides: !ruby/object:Overrides::ResourceOverrides
       zone: !ruby/object:Overrides::Terraform::PropertyOverride
         required: false
         default_from_api: true
+  NetworkPeeringRoutesConfig: !ruby/object:Overrides::Terraform::ResourceOverride
+    id_format: "projects/{{project}}/global/networks/{{network}}/networkPeerings/{{peering}}"
+    import_format: ["projects/{{project}}/global/networks/{{network}}/networkPeerings/{{peering}}"]
+    # format from google_compute_network_peering
+    mutex: 'projects/{{project}}/global/networks/{{network}}/peerings'
+    examples:
+      - !ruby/object:Provider::Terraform::Examples
+        name: "network_peering_routes_config_basic"
+        primary_resource_id: "peering_primary_routes"
+        vars:
+          peering_primary_name: "primary-peering"
+          peering_secondary_name: "secondary-peering"
+          network_primary_name: "primary-network"
+          network_secondary_name: "secondary-network"
+      - !ruby/object:Provider::Terraform::Examples
+        name: "network_peering_routes_config_gke"
+        primary_resource_id: "peering_gke_routes"
+        vars:
+          network_name: "container-network"
+          subnetwork_name: "container-subnetwork"
+          gke_cluster_name: "private-cluster"
+    properties:
+      network: !ruby/object:Overrides::Terraform::PropertyOverride
+        custom_flatten: 'templates/terraform/custom_flatten/name_from_self_link.erb'
+    custom_code: !ruby/object:Provider::Terraform::CustomCode
+      custom_delete: 'templates/terraform/custom_delete/skip_delete.go.erb'
+      encoder: 'templates/terraform/encoders/network_peering_routes_config.go.erb'
   NodeGroup: !ruby/object:Overrides::Terraform::ResourceOverride
     docs: !ruby/object:Provider::Terraform::Docs
       warning: |
@@ -1057,19 +1125,47 @@ overrides: !ruby/object:Overrides::ResourceOverrides
           If it is not provided, the provider region is used.
       serverBinding: !ruby/object:Overrides::Terraform::PropertyOverride
         default_from_api: true
+  PacketMirroring: !ruby/object:Overrides::Terraform::ResourceOverride
+    examples:
+      - !ruby/object:Provider::Terraform::Examples
+        name: "compute_packet_mirroring_full"
+        primary_resource_id: "foobar"
+        min_version: 'beta'
+        vars:
+          instance_name: "my-instance"
+          subnetwork_name: "my-subnetwork"
+          service_name: "my-service"
+          hc_name: "my-healthcheck"
+          mirroring_name: "my-mirroring"
+          network_name: "my-network"
+
+    properties:
+      name: !ruby/object:Overrides::Terraform::PropertyOverride
+        validation: !ruby/object:Provider::Terraform::Validation
+          function: 'validateGCPName'
+      priority: !ruby/object:Overrides::Terraform::PropertyOverride
+        required: false
+        default_from_api: true
+      collectorIlb: !ruby/object:Overrides::Terraform::PropertyOverride
+        description: |
+            The Forwarding Rule resource (of type load_balancing_scheme=INTERNAL)
+            that will be used as collector for mirrored traffic. The
+            specified forwarding rule must have is_mirroring_collector
+            set to true.
+      region: !ruby/object:Overrides::Terraform::PropertyOverride
+        required: false
+        default_from_api: true
+        custom_flatten: 'templates/terraform/custom_flatten/name_from_self_link.erb'
+        description: |
+          The Region in which the created address should reside.
+          If it is not provided, the provider region is used.
+
+  ProjectInfo: !ruby/object:Overrides::Terraform::ResourceOverride
+    exclude: true
   Region: !ruby/object:Overrides::Terraform::ResourceOverride
     exclude: true
   RegionAutoscaler: !ruby/object:Overrides::Terraform::ResourceOverride
     examples:
-      - !ruby/object:Provider::Terraform::Examples
-        name: "region_autoscaler_beta"
-        primary_resource_id: "foobar"
-        min_version: 'beta'
-        vars:
-          region_autoscaler_name: "my-region-autoscaler"
-          instance_template_name: "my-instance-template"
-          target_pool_name: "my-target-pool"
-          rigm_name: "my-region-igm"
       - !ruby/object:Provider::Terraform::Examples
         name: "region_autoscaler_basic"
         primary_resource_id: "foobar"
@@ -1322,6 +1418,12 @@ overrides: !ruby/object:Overrides::ResourceOverrides
       region: !ruby/object:Overrides::Terraform::PropertyOverride
         required: false
         default_from_api: true
+      snapshotSchedulePolicy.schedule.dailySchedule.startTime: !ruby/object:Overrides::Terraform::PropertyOverride
+        validation: !ruby/object:Provider::Terraform::Validation
+          function: 'validateHourlyOnly'
+      snapshotSchedulePolicy.schedule.hourlySchedule.startTime: !ruby/object:Overrides::Terraform::PropertyOverride
+        validation: !ruby/object:Provider::Terraform::Validation
+          function: 'validateHourlyOnly'
       snapshotSchedulePolicy.schedule.weeklySchedule.dayOfWeeks: !ruby/object:Overrides::Terraform::PropertyOverride
         is_set: true
       snapshotSchedulePolicy.snapshotProperties.storageLocations: !ruby/object:Overrides::Terraform::PropertyOverride
@@ -1408,12 +1510,18 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         vars:
           router_name: "my-router"
           network_name: "my-network"
+    custom_code: !ruby/object:Provider::Terraform::CustomCode
+      constants: templates/terraform/constants/router.go.erb
+      resource_definition: templates/terraform/resource_definition/router.go.erb
     properties:
       id: !ruby/object:Overrides::Terraform::PropertyOverride
         exclude: true
       name: !ruby/object:Overrides::Terraform::PropertyOverride
         validation: !ruby/object:Provider::Terraform::Validation
           function: 'validateGCPName'
+      bgp.asn: !ruby/object:Overrides::Terraform::PropertyOverride
+        validation: !ruby/object:Provider::Terraform::Validation
+          function: 'validateRFC6996Asn'
       region: !ruby/object:Overrides::Terraform::PropertyOverride
         required: false
         default_from_api: true
@@ -1465,6 +1573,14 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         required: false
         default_from_api: true
         custom_flatten: 'templates/terraform/custom_flatten/name_from_self_link.erb'
+      udpIdleTimeoutSec: !ruby/object:Overrides::Terraform::PropertyOverride
+        custom_flatten: 'templates/terraform/custom_flatten/default_if_empty.erb'
+      icmpIdleTimeoutSec: !ruby/object:Overrides::Terraform::PropertyOverride
+        custom_flatten: 'templates/terraform/custom_flatten/default_if_empty.erb'
+      tcpEstablishedIdleTimeoutSec: !ruby/object:Overrides::Terraform::PropertyOverride
+        custom_flatten: 'templates/terraform/custom_flatten/default_if_empty.erb'
+      tcpTransitoryIdleTimeoutSec: !ruby/object:Overrides::Terraform::PropertyOverride
+        custom_flatten: 'templates/terraform/custom_flatten/default_if_empty.erb'
     custom_code: !ruby/object:Provider::Terraform::CustomCode
       constants: 'templates/terraform/constants/router_nat.go.erb'
       resource_definition: 'templates/terraform/resource_definition/router_nat.go.erb'
@@ -1756,9 +1872,12 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         schema_config_mode_attr: true
         send_empty_value: true
         description: |
-          {{description}}This field uses attr-as-block mode to avoid breaking
-          users during the 0.12 upgrade. See [the Attr-as-Block page](https://www.terraform.io/docs/configuration/attr-as-blocks.html)
-          for more details.
+          {{description}}
+          **Note**: This field uses [attr-as-block mode](https://www.terraform.io/docs/configuration/attr-as-blocks.html) to avoid
+          breaking users during the 0.12 upgrade. To explicitly send a list
+          of zero objects you must use the following syntax:
+          `example=[]`
+          For more details about this behavior, see [this section](https://www.terraform.io/docs/configuration/attr-as-blocks.html#defining-a-fixed-object-collection-value).
       secondaryIpRanges.rangeName: !ruby/object:Overrides::Terraform::PropertyOverride
         validation: !ruby/object:Provider::Terraform::Validation
           function: 'validateGCPName'
@@ -1769,6 +1888,8 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         send_empty_value: true
         custom_expand: 'templates/terraform/custom_expand/subnetwork_log_config.go.erb'
         custom_flatten: 'templates/terraform/custom_flatten/subnetwork_log_config.go.erb'
+      logConfig.enable: !ruby/object:Overrides::Terraform::PropertyOverride
+        exclude: true
       ipCidrRange: !ruby/object:Overrides::Terraform::PropertyOverride
         validation: !ruby/object:Provider::Terraform::Validation
           function: 'validateIpCidrRange'
@@ -1790,7 +1911,7 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         vars:
           subnetwork_name: "test-subnetwork"
           network_name: "test-network"
-        primary_resource_name: "fmt.Sprintf(\"test-subnetwork%s\", context[\"random_suffix\"])"
+        primary_resource_name: "fmt.Sprintf(\"tf-test-test-subnetwork%s\", context[\"random_suffix\"])"
       - !ruby/object:Provider::Terraform::Examples
         name: "subnetwork_logging_config"
         primary_resource_id: "subnet-with-logging"
@@ -1833,6 +1954,7 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         name: proxyId
       quicOverride: !ruby/object:Overrides::Terraform::PropertyOverride
         default_value: :NONE
+        custom_flatten: 'templates/terraform/custom_flatten/default_if_empty.erb'
   RegionTargetHttpProxy: !ruby/object:Overrides::Terraform::ResourceOverride
     examples:
       - !ruby/object:Provider::Terraform::Examples

@@ -56,7 +56,7 @@ import (
 	"google.golang.org/api/serviceusage/v1"
 	"google.golang.org/api/sourcerepo/v1"
 	"google.golang.org/api/spanner/v1"
-	"google.golang.org/api/sqladmin/v1beta4"
+	sqladmin "google.golang.org/api/sqladmin/v1beta4"
 	"google.golang.org/api/storage/v1"
 	"google.golang.org/api/storagetransfer/v1"
 )
@@ -153,7 +153,6 @@ type Config struct {
 	clientIAP   *iap.Service
 	<% end -%>
 
-	ServiceManagementBasePath string
 	clientServiceMan          *servicemanagement.APIService
 
 	ServiceUsageBasePath       string
@@ -314,7 +313,7 @@ func (c *Config) LoadAndValidate(ctx context.Context) error {
 	c.clientStorage.UserAgent = userAgent
 	c.clientStorage.BasePath = storageClientBasePath
 
-	sqlClientBasePath := c.SQLBasePath
+	sqlClientBasePath := removeBasePathVersion(removeBasePathVersion(c.SQLBasePath))
 	log.Printf("[INFO] Instantiating Google SqlAdmin client for path %s", sqlClientBasePath)
 	c.clientSqlAdmin, err = sqladmin.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
@@ -681,7 +680,6 @@ func ConfigureBasePaths(c *Config) {
 	c.IamCredentialsBasePath = IamCredentialsDefaultBasePath
 	c.ResourceManagerV2Beta1BasePath = ResourceManagerV2Beta1DefaultBasePath
 	c.IAMBasePath = IAMDefaultBasePath
-	c.ServiceManagementBasePath = ServiceManagementDefaultBasePath
 	c.ServiceNetworkingBasePath = ServiceNetworkingDefaultBasePath
 	c.ServiceUsageBasePath = ServiceUsageDefaultBasePath
 	c.BigQueryBasePath = BigQueryDefaultBasePath

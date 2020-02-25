@@ -1,7 +1,9 @@
 package google
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"reflect"
 	"strconv"
@@ -18,7 +20,57 @@ import (
 var (
 	pname          = "Terraform Acceptance Tests"
 	originalPolicy *cloudresourcemanager.Policy
+	testPrefix     = "tf-test"
 )
+
+func init() {
+	resource.AddTestSweepers("Project", &resource.Sweeper{
+		Name: "Project",
+		F:    testSweepProject,
+	})
+}
+
+func testSweepProject(region string) error {
+	config, err := sharedConfigForRegion(region)
+	if err != nil {
+		log.Printf("[INFO][SWEEPER_LOG] error getting shared config for region: %s", err)
+		return err
+	}
+
+	err = config.LoadAndValidate(context.Background())
+	if err != nil {
+		log.Printf("[INFO][SWEEPER_LOG] error loading: %s", err)
+		return err
+	}
+
+	token := ""
+	for paginate := true; paginate; {
+		// Filter for projects with test prefix
+		filter := "id:" + testPrefix + "*"
+		found, err := config.clientResourceManager.Projects.List().Filter(filter).PageToken(token).Do()
+		if err != nil {
+			log.Printf("[INFO][SWEEPER_LOG] error listing projects: %s", err)
+			return nil
+		}
+		for _, project := range found.Projects {
+			if project.LifecycleState != "ACTIVE" {
+				continue
+			}
+			log.Printf("[INFO][SWEEPER_LOG] Sweeping Project id: %s", project.ProjectId)
+
+			_, err := config.clientResourceManager.Projects.Delete(project.ProjectId).Do()
+
+			if err != nil {
+				log.Printf("[INFO][SWEEPER_LOG] Error, failed to delete project %s: %s", project.Name, err)
+				continue
+			}
+		}
+		token = found.NextPageToken
+		paginate = token != ""
+	}
+
+	return nil
+}
 
 // Test that a Project resource can be created without an organization
 func TestAccProject_createWithoutOrg(t *testing.T) {
@@ -29,7 +81,7 @@ func TestAccProject_createWithoutOrg(t *testing.T) {
 		t.Skip("Service accounts cannot create projects without a parent. Requires user credentials.")
 	}
 
-	pid := "terraform-" + acctest.RandString(10)
+	pid := acctest.RandomWithPrefix(testPrefix)
 	resource.Test(t, resource.TestCase{
 		PreCheck:  func() { testAccPreCheck(t) },
 		Providers: testAccProviders,
@@ -51,7 +103,7 @@ func TestAccProject_create(t *testing.T) {
 	t.Parallel()
 
 	org := getTestOrgFromEnv(t)
-	pid := "terraform-" + acctest.RandString(10)
+	pid := acctest.RandomWithPrefix(testPrefix)
 	resource.Test(t, resource.TestCase{
 		PreCheck:  func() { testAccPreCheck(t) },
 		Providers: testAccProviders,
@@ -75,7 +127,7 @@ func TestAccProject_billing(t *testing.T) {
 	skipIfEnvNotSet(t, "GOOGLE_BILLING_ACCOUNT_2")
 	billingId2 := os.Getenv("GOOGLE_BILLING_ACCOUNT_2")
 	billingId := getTestBillingAccountFromEnv(t)
-	pid := "terraform-" + acctest.RandString(10)
+	pid := acctest.RandomWithPrefix(testPrefix)
 	resource.Test(t, resource.TestCase{
 		PreCheck:  func() { testAccPreCheck(t) },
 		Providers: testAccProviders,
@@ -117,7 +169,7 @@ func TestAccProject_labels(t *testing.T) {
 	t.Parallel()
 
 	org := getTestOrgFromEnv(t)
-	pid := "terraform-" + acctest.RandString(10)
+	pid := acctest.RandomWithPrefix(testPrefix)
 	resource.Test(t, resource.TestCase{
 		PreCheck:  func() { testAccPreCheck(t) },
 		Providers: testAccProviders,
@@ -159,7 +211,7 @@ func TestAccProject_deleteDefaultNetwork(t *testing.T) {
 	t.Parallel()
 
 	org := getTestOrgFromEnv(t)
-	pid := "terraform-" + acctest.RandString(10)
+	pid := acctest.RandomWithPrefix(testPrefix)
 	billingId := getTestBillingAccountFromEnv(t)
 	resource.Test(t, resource.TestCase{
 		PreCheck:  func() { testAccPreCheck(t) },
@@ -176,8 +228,8 @@ func TestAccProject_parentFolder(t *testing.T) {
 	t.Parallel()
 
 	org := getTestOrgFromEnv(t)
-	pid := "terraform-" + acctest.RandString(10)
-	folderDisplayName := "tf-test-" + acctest.RandString(10)
+	pid := acctest.RandomWithPrefix(testPrefix)
+	folderDisplayName := testPrefix + acctest.RandString(10)
 	resource.Test(t, resource.TestCase{
 		PreCheck:  func() { testAccPreCheck(t) },
 		Providers: testAccProviders,
@@ -374,6 +426,11 @@ resource "google_folder" "folder1" {
 }
 
 func skipIfEnvNotSet(t *testing.T, envs ...string) {
+	if t == nil {
+		log.Printf("[DEBUG] Not running inside of test - skip skipping")
+		return
+	}
+
 	for _, k := range envs {
 		if os.Getenv(k) == "" {
 			t.Skipf("Environment variable %s is not set", k)

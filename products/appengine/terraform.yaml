@@ -15,12 +15,14 @@
 overrides: !ruby/object:Overrides::ResourceOverrides
   FirewallRule: !ruby/object:Overrides::Terraform::ResourceOverride
     import_format: ["apps/{{project}}/firewall/ingressRules/{{priority}}"]
+    # This resource is a child resource (requires app ID in the URL)
+    skip_sweeper: true
     examples:
       - !ruby/object:Provider::Terraform::Examples
         name: "app_engine_firewall_rule_basic"
         primary_resource_id: "rule"
         vars:
-          project_id: "test-project"
+          project_id: "ae-project"
         test_env_vars:
           org_id: :ORG_ID
   StandardAppVersion: !ruby/object:Overrides::Terraform::ResourceOverride
@@ -63,9 +65,9 @@ overrides: !ruby/object:Overrides::ResourceOverrides
         ignore_read_extra:
           - "delete_service_on_destroy"
         vars:
-          project_id: "test-project"
+          project_id: "ae-project"
           bucket_name: "appengine-static-content"
-          service_name: "tf-test-service"
+          service_name: "ae-service"
         test_env_vars:
           org_id: :ORG_ID
   Service: !ruby/object:Overrides::Terraform::ResourceOverride
@@ -78,8 +80,6 @@ overrides: !ruby/object:Overrides::ResourceOverrides
       - !ruby/object:Provider::Terraform::Examples
         name: "app_engine_domain_mapping_basic"
         primary_resource_id: "domain_mapping"
-        vars:
-          domain: "dm-test-"
     custom_code:  !ruby/object:Provider::Terraform::CustomCode
       constants: templates/terraform/constants/domain_mapping.erb
     properties:
@@ -99,6 +99,8 @@ overrides: !ruby/object:Overrides::ResourceOverrides
     import_format: ["{{project}}"]
     mutex: "apps/{{project}}"
     error_retry_predicates: ["isAppEngineRetryableError"]
+    # This resource is a child resource (requires app ID in the URL)
+    skip_sweeper: true
     custom_code: !ruby/object:Provider::Terraform::CustomCode
       test_check_destroy: templates/terraform/custom_check_destroy/appengine.go.erb
     examples:

@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 
 	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"google.golang.org/api/dataflow/v1b3"
+	dataflow "google.golang.org/api/dataflow/v1b3"
 	"google.golang.org/api/googleapi"
 )
 
@@ -114,7 +114,10 @@ func resourceDataflowJob() *schema.Resource {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
-
+			"type": {
+				Type:     schema.TypeString,
+				Computed: true,
+			},
 			"service_account_email": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -146,6 +149,11 @@ func resourceDataflowJob() *schema.Resource {
 				Optional:     true,
 				ForceNew:     true,
 				ValidateFunc: validation.StringInSlice([]string{"WORKER_IP_PUBLIC", "WORKER_IP_PRIVATE", ""}, false),
+			},
+
+			"job_id": {
+				Type:     schema.TypeString,
+				Computed: true,
 			},
 		},
 	}
@@ -220,8 +228,10 @@ func resourceDataflowJobRead(d *schema.ResourceData, meta interface{}) error {
 		return handleNotFoundError(err, d, fmt.Sprintf("Dataflow job %s", id))
 	}
 
+	d.Set("job_id", job.Id)
 	d.Set("state", job.CurrentState)
 	d.Set("name", job.Name)
+	d.Set("type", job.Type)
 	d.Set("project", project)
 	d.Set("labels", job.Labels)
 

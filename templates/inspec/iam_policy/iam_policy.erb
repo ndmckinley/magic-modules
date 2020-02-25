@@ -32,11 +32,19 @@ class <%= object.name -%>IamPolicy < GcpResourceBase
   end
 
 <%
-individual_url = object.self_link || object.base_url + '/{{name}}' 
+individual_url = object.iam_policy.base_url || object.self_link || object.base_url + '/{{name}}' 
 identifiers = extract_identifiers(individual_url)
 -%>
   def to_s
     "<%= object.name -%> IamPolicy #{@params[:<%= identifiers.last.underscore -%>]}"
+  end
+
+  def iam_binding_roles
+    @bindings.map(&:role)
+  end
+
+  def count
+    @bindings.size
   end
 
   private
@@ -52,6 +60,6 @@ identifiers.each do |identifier|
 end
 -%>
   def resource_base_url
-    '<%= individual_url -%><%= object.iam_policy.method_name_separator -%>getIamPolicy'
+    '<%= individual_url -%><%= object.iam_policy.method_name_separator -%><%= object.iam_policy.fetch_iam_policy_method -%>'
   end
 end

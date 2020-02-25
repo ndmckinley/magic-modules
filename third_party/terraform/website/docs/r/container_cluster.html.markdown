@@ -154,7 +154,7 @@ per node in this cluster. This doesn't work on "routes-based" clusters, clusters
 that don't have IP Aliasing enabled. See the [official documentation](https://cloud.google.com/kubernetes-engine/docs/how-to/flexible-pod-cidr)
 for more information.
 
-* `enable_binary_authorization` - (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html)) Enable Binary Authorization for this cluster.
+* `enable_binary_authorization` - (Optional) Enable Binary Authorization for this cluster.
     If enabled, all container images will be validated by Google Binary Authorization.
 
 * `enable_kubernetes_alpha` - (Optional) Whether to enable Kubernetes Alpha features for
@@ -184,8 +184,8 @@ making the cluster VPC-native instead of routes-based. Structure is documented
 below.
 
 * `logging_service` - (Optional) The logging service that the cluster should
-    write logs to. Available options include `logging.googleapis.com`,
-    `logging.googleapis.com/kubernetes`, and `none`. Defaults to `logging.googleapis.com/kubernetes`
+    write logs to. Available options include `logging.googleapis.com`(Legacy Stackdriver),
+    `logging.googleapis.com/kubernetes`(Stackdriver Kubernetes Engine Logging), and `none`. Defaults to `logging.googleapis.com/kubernetes`
 
 * `maintenance_policy` - (Optional) The maintenance policy to use for the cluster. Structure is
     documented below.
@@ -221,7 +221,7 @@ region are guaranteed to support the same version.
     Automatically send metrics from pods in the cluster to the Google Cloud Monitoring API.
     VM metrics will be collected by Google Compute Engine regardless of this setting
     Available options include
-    `monitoring.googleapis.com`, `monitoring.googleapis.com/kubernetes`, and `none`.
+    `monitoring.googleapis.com`(Legacy Stackdriver), `monitoring.googleapis.com/kubernetes`(Stackdriver Kubernetes Engine Monitoring), and `none`.
     Defaults to `monitoring.googleapis.com/kubernetes`
 
 * `network` - (Optional) The name or self_link of the Google Compute Engine
@@ -365,6 +365,11 @@ in addition to node auto-provisioning. Structure is documented below.
 * `auto_provisioning_defaults` - (Optional) Contains defaults for a node pool created by NAP.
 Structure is documented below.
 
+* `autoscaling_profile` - (Optional, [Beta](https://terraform.io/docs/providers/google/provider_versions.html)) Configuration
+options for the [Autoscaling profile](https://cloud.google.com/kubernetes-engine/docs/concepts/cluster-autoscaler#autoscaling_profiles)
+feature, which lets you choose whether the cluster autoscaler should optimize for resource utilization or resource availability
+when deciding to remove nodes from a cluster. Can be `BALANCED` or `OPTIMIZE_UTILIZATION`. Defaults to `BALANCED`.
+
 The `resource_limits` block supports:
 
 * `resource_type` - (Required) The type of the resource. For example, `cpu` and
@@ -378,12 +383,10 @@ for a list of types.
 The `auto_provisioning_defaults` block supports:
 
 * `oauth_scopes` - (Optional) Scopes that are used by NAP when creating node pools.
-If `oauth_scopes` are specified, `service_account` must be empty.
 
 -> `monitoring.write` is always enabled regardless of user input.  `monitoring` and `logging.write` may also be enabled depending on the values for `monitoring_service` and `logging_service`.
 
 * `service_account` - (Optional) The Google Cloud Platform Service Account to be used by the node VMs.
-If `service_account` is specified, `oauth_scopes` must be empty.
 
 The `authenticator_groups_config` block supports:
 
@@ -410,13 +413,23 @@ Specify `start_time` and `end_time` in [RFC3339](https://www.ietf.org/rfc/rfc333
 the initial date that the window starts, and the end time is used for calculating duration.  Specify `recurrence` in
 [RFC5545](https://tools.ietf.org/html/rfc5545#section-3.8.5.3) RRULE format, to specify when this recurs.
 
-For example:
+Examples:
 ```
 maintenance_policy {
   recurring_window {
-    start_time = "2019-01-01T03:00"
-    end_time = "2019-01-01T06:00"
+    start_time = "2019-08-01T02:00:00Z"
+    end_time = "2019-08-01T06:00:00Z"
     recurrence = "FREQ=DAILY"
+  }
+}
+```
+
+```
+maintenance_policy {
+  recurring_window {
+    start_time = "2019-01-01T09:00:00-04:00"
+    end_time = "2019-01-01T17:00:00-04:00"
+    recurrence = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
   }
 }
 ```
@@ -543,6 +556,8 @@ The `node_config` block supports:
 * `sandbox_config` - (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html)) [GKE Sandbox](https://cloud.google.com/kubernetes-engine/docs/how-to/sandbox-pods) configuration. When enabling this feature you must specify `image_type = "COS_CONTAINERD"` and `node_version = "1.12.7-gke.17"` or later to use it.
     Structure is documented below.
 
+* `boot_disk_kms_key` - (Optional, [Beta](https://terraform.io/docs/providers/google/guides/provider_versions.html)) The Customer Managed Encryption Key used to encrypt the boot disk attached to each node in the node pool. This should be of the form projects/[KEY_PROJECT_ID]/locations/[LOCATION]/keyRings/[RING_NAME]/cryptoKeys/[KEY_NAME]. For more information about protecting resources with Cloud KMS Keys please see: https://cloud.google.com/compute/docs/disks/customer-managed-encryption
+
 * `service_account` - (Optional) The service account to be used by the Node VMs.
     If not specified, the "default" service account is used.
     In order to use the configured `oauth_scopes` for logging and monitoring, the service account being used needs the
@@ -577,6 +592,7 @@ The `guest_accelerator` block supports:
 The `workload_identity_config` block supports:
 
 * `identity_namespace` (Required) - Currently, the only supported identity namespace is the project's default.
+
 ```hcl
 workload_identity_config {
   identity_namespace = "${data.google_project.project.project_id}.svc.id.goog"
@@ -620,7 +636,7 @@ In addition, the `private_cluster_config` allows access to the following read-on
 `private_cluster_config` when `enable_private_nodes` is `false`. It's
 recommended that you omit the block entirely if the field is not set to `true`.
 
-The `sandbox_type` block supports:
+The `sandbox_config` block supports:
 
 * `sandbox_type` (Required) Which sandbox to use for pods in the node pool.
     Accepted values are:
@@ -695,6 +711,8 @@ exported:
 
 * `instance_group_urls` - List of instance group URLs which have been assigned
     to the cluster.
+
+* `label_fingerprint` - The fingerprint of the set of labels for this cluster.
 
 * `maintenance_policy.0.daily_maintenance_window.0.duration` - Duration of the time window, automatically chosen to be
     smallest possible in the given scenario.

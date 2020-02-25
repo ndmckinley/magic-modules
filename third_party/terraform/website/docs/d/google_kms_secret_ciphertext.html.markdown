@@ -9,6 +9,8 @@ description: |-
 
 # google\_kms\_secret\_ciphertext
 
+!> **Warning:** This data source is deprecated. Use the [`google_kms_secret_ciphertext`](../r/kms_secret_ciphertext.html) **resource** instead.
+
 This data source allows you to encrypt data with Google Cloud KMS and use the
 ciphertext within your resource definitions.
 
@@ -71,6 +73,7 @@ resource "google_compute_instance" "instance" {
 
 The resulting instance can then access the encrypted password from its metadata
 and decrypt it, e.g. using the [Cloud SDK](https://cloud.google.com/sdk/gcloud/reference/kms/decrypt)):
+
 ```bash
 $ curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/password \
 > | base64 -d | gcloud kms decrypt \
