@@ -45,9 +45,6 @@ import (
 <% end -%>
 	"google.golang.org/api/iam/v1"
 	iamcredentials "google.golang.org/api/iamcredentials/v1"
-<% unless version == 'ga' -%>
-	iap "google.golang.org/api/iap/v1beta1"
-<% end -%>
 	cloudlogging "google.golang.org/api/logging/v2"
 	"google.golang.org/api/pubsub/v1"
 	"google.golang.org/api/runtimeconfig/v1beta1"
@@ -56,7 +53,7 @@ import (
 	"google.golang.org/api/serviceusage/v1"
 	"google.golang.org/api/sourcerepo/v1"
 	"google.golang.org/api/spanner/v1"
-	"google.golang.org/api/sqladmin/v1beta4"
+	sqladmin "google.golang.org/api/sqladmin/v1beta4"
 	"google.golang.org/api/storage/v1"
 	"google.golang.org/api/storagetransfer/v1"
 )
@@ -148,12 +145,8 @@ type Config struct {
 	<% unless version == 'ga' -%>
 
 	clientHealthcare   *healthcare.Service
-
-	IAPBasePath string
-	clientIAP   *iap.Service
 	<% end -%>
 
-	ServiceManagementBasePath string
 	clientServiceMan          *servicemanagement.APIService
 
 	ServiceUsageBasePath       string
@@ -314,7 +307,7 @@ func (c *Config) LoadAndValidate(ctx context.Context) error {
 	c.clientStorage.UserAgent = userAgent
 	c.clientStorage.BasePath = storageClientBasePath
 
-	sqlClientBasePath := c.SQLBasePath
+	sqlClientBasePath := removeBasePathVersion(removeBasePathVersion(c.SQLBasePath))
 	log.Printf("[INFO] Instantiating Google SqlAdmin client for path %s", sqlClientBasePath)
 	c.clientSqlAdmin, err = sqladmin.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
@@ -385,18 +378,6 @@ func (c *Config) LoadAndValidate(ctx context.Context) error {
 	}
 	c.clientIamCredentials.UserAgent = userAgent
 	c.clientIamCredentials.BasePath = iamCredentialsClientBasePath
-
-
-	<% unless version == 'ga' -%>
-	iapClientBasePath := removeBasePathVersion(c.IAPBasePath)
-	log.Printf("[INFO] Instantiating IAP client for path %s", iapClientBasePath)
-	c.clientIAP, err = iap.NewService(ctx, option.WithHTTPClient(client))
-	if err != nil {
-		return err
-	}
-	c.clientIAP.UserAgent = userAgent
-	c.clientIAP.BasePath = iapClientBasePath
-	<% end -%>
 
 	serviceManagementClientBasePath := removeBasePathVersion(c.ServiceManagementBasePath)
 	log.Printf("[INFO] Instantiating Google Cloud Service Management client for path %s", serviceManagementClientBasePath)
@@ -665,11 +646,6 @@ func ConfigureBasePaths(c *Config) {
 	<% end -%>
 
 	// Handwritten Products / Versioned / Atypical Entries
-	<% unless version == 'ga' -%>
-	// start beta-only products
-	c.IAPBasePath = IAPDefaultBasePath
-	// end beta-only products
-	<% end -%>
 	c.CloudBillingBasePath = CloudBillingDefaultBasePath
 	c.ComposerBasePath = ComposerDefaultBasePath
 	c.ComputeBetaBasePath = ComputeBetaDefaultBasePath
@@ -681,7 +657,6 @@ func ConfigureBasePaths(c *Config) {
 	c.IamCredentialsBasePath = IamCredentialsDefaultBasePath
 	c.ResourceManagerV2Beta1BasePath = ResourceManagerV2Beta1DefaultBasePath
 	c.IAMBasePath = IAMDefaultBasePath
-	c.ServiceManagementBasePath = ServiceManagementDefaultBasePath
 	c.ServiceNetworkingBasePath = ServiceNetworkingDefaultBasePath
 	c.ServiceUsageBasePath = ServiceUsageDefaultBasePath
 	c.BigQueryBasePath = BigQueryDefaultBasePath

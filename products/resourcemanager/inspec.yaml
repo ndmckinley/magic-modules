@@ -17,14 +17,35 @@ overrides: !ruby/object:Overrides::ResourceOverrides
   Lien: !ruby/object:Overrides::Inspec::ResourceOverride
     exclude: true
   Project: !ruby/object:Overrides::Inspec::ResourceOverride
-    self_link: projects/{{projectId}}
-    exclude_resource: true
+    additional_functions: third_party/inspec/custom_functions/google_project.erb
+    singular_extra_examples: third_party/inspec/documentation/google_project.md
+    plural_extra_examples: third_party/inspec/documentation/google_projects.md
+    resource_name: google_project
+    self_link: projects/{{project}}
+    properties:
+      id: !ruby/object:Overrides::Inspec::PropertyOverride
+        name: project_id
+      name: !ruby/object:Overrides::Inspec::PropertyOverride
+        override_name: project_name
+      number: !ruby/object:Overrides::Inspec::PropertyOverride
+        override_name: project_number
     iam_policy: !ruby/object:Api::Resource::IamPolicy
       exclude: false
       method_name_separator: ':'
       fetch_iam_policy_verb: :POST
   Organization: !ruby/object:Overrides::Inspec::ResourceOverride
-    exclude: true
+    privileged: true
+    # Name should be organizations/123456
+    self_link: '{{name}}'
+    base_url: organizations:search
+    resource_name: google_organization
+    singular_extra_examples: third_party/inspec/documentation/google_organization.md
+    plural_extra_examples: third_party/inspec/documentation/google_organizations.md
+    plural_fetch_verb: :POST
+    iam_policy: !ruby/object:Api::Resource::IamPolicy
+      exclude: false
+      method_name_separator: ':'
+      fetch_iam_policy_verb: :POST
   Folder: !ruby/object:Overrides::Inspec::ResourceOverride
     product_url: https://cloudresourcemanager.googleapis.com/v2/
     # Creating and viewing folders requires organization level privileges

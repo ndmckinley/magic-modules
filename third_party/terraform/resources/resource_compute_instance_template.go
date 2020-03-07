@@ -41,6 +41,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 		CustomizeDiff: customdiff.All(
 			resourceComputeInstanceTemplateSourceImageCustomizeDiff,
 			resourceComputeInstanceTemplateScratchDiskCustomizeDiff,
+			resourceComputeInstanceTemplateBootDiskCustomizeDiff,
 		),
 		MigrateState: resourceComputeInstanceTemplateMigrateState,
 
@@ -58,11 +59,10 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 			},
 
 			"name_prefix": {
-				Type:          schema.TypeString,
-				Optional:      true,
-				Computed:      true,
-				ForceNew:      true,
-				ConflictsWith: []string{"name"},
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+				ForceNew: true,
 				ValidateFunc: func(v interface{}, k string) (ws []string, errors []error) {
 					// https://cloud.google.com/compute/docs/reference/latest/instanceTemplates#resource
 					// uuid is 26 characters, limit the prefix to 37.
@@ -134,6 +134,7 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Type:     schema.TypeString,
 							Optional: true,
 							Computed: true,
+							ForceNew: true,
 						},
 
 						"interface": {
@@ -245,12 +246,6 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							DiffSuppressFunc: compareSelfLinkOrResourceName,
 						},
 
-						"network_ip": {
-							Type:     schema.TypeString,
-							Optional: true,
-							ForceNew: true,
-						},
-
 						"subnetwork": {
 							Type:             schema.TypeString,
 							Optional:         true,
@@ -263,6 +258,17 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 							Type:     schema.TypeString,
 							Optional: true,
 							ForceNew: true,
+							Computed: true,
+						},
+
+						"network_ip": {
+							Type:     schema.TypeString,
+							Optional: true,
+							ForceNew: true,
+						},
+
+						"name": {
+							Type:     schema.TypeString,
 							Computed: true,
 						},
 
@@ -283,6 +289,11 @@ func resourceComputeInstanceTemplate() *schema.Resource {
 										Optional:     true,
 										Computed:     true,
 										ValidateFunc: validation.StringInSlice([]string{"PREMIUM", "STANDARD"}, false),
+									},
+									// Possibly configurable- this was added so we don't break if it's inadvertently set
+									"public_ptr_domain_name": {
+										Type:     schema.TypeString,
+										Computed: true,
 									},
 								},
 							},
@@ -504,11 +515,6 @@ func resourceComputeInstanceTemplateSourceImageCustomizeDiff(diff *schema.Resour
 			var err error
 			old, new := diff.GetChange(key)
 			if old == "" || new == "" {
-				// no sense in resolving empty strings
-				err = diff.ForceNew(key)
-				if err != nil {
-					return err
-				}
 				continue
 			}
 			// project must be retrieved once we know there is a diff to resolve, otherwise it will
@@ -535,10 +541,6 @@ func resourceComputeInstanceTemplateSourceImageCustomizeDiff(diff *schema.Resour
 				return err
 			}
 			if oldResolved != newResolved {
-				err = diff.ForceNew(key)
-				if err != nil {
-					return err
-				}
 				continue
 			}
 			err = diff.Clear(key)
@@ -575,6 +577,20 @@ func resourceComputeInstanceTemplateScratchDiskCustomizeDiffFunc(diff TerraformR
 		}
 	}
 
+	return nil
+}
+
+func resourceComputeInstanceTemplateBootDiskCustomizeDiff(diff *schema.ResourceDiff, meta interface{}) error {
+	numDisks := diff.Get("disk.#").(int)
+	// No disk except the first can be the boot disk
+	for i := 1; i < numDisks; i++ {
+		key := fmt.Sprintf("disk.%d.boot", i)
+		if v, ok := diff.GetOk(key); ok {
+			if v.(bool) {
+				return fmt.Errorf("Only the first disk specified in instance_template can be the boot disk. %s was true", key)
+			}
+		}
+	}
 	return nil
 }
 

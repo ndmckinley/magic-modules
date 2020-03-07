@@ -28,7 +28,7 @@ resource "google_sql_database_instance" "master" {
   name = "master-instance-${random_id.db_name_suffix.hex}"
 
   settings {
-    tier = "D0"
+    tier = "db-f1-micro"
   }
 }
 
@@ -50,7 +50,8 @@ The following arguments are supported:
 * `name` - (Required) The name of the user. Changing this forces a new resource
     to be created.
 
-* `password` - (Optional) The password for the user. Can be updated.
+* `password` - (Optional) The password for the user. Can be updated. For Postgres
+    instances this is a Required field.
 
 - - -
 

@@ -22,6 +22,8 @@ datasources: !ruby/object:Overrides::ResourceOverrides
     exclude: true
   RegionAutoscaler: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
+  RegionDiskResourcePolicyAttachment: !ruby/object:Overrides::Ansible::ResourceOverride
+    exclude: true
   DiskResourcePolicyAttachment: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
   # Readonly resources.
@@ -33,11 +35,15 @@ datasources: !ruby/object:Overrides::ResourceOverrides
     exclude: true
   NetworkEndpoint: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
+  ProjectInfo: !ruby/object:Overrides::Ansible::ResourceOverride
+    exclude: true
   Region: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
   RegionDiskType: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
   RegionHealthCheck: !ruby/object:Overrides::Ansible::ResourceOverride
+    exclude: true
+  RegionInstanceGroupManager: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
   RegionSslCertificate: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
@@ -83,6 +89,8 @@ overrides: !ruby/object:Overrides::ResourceOverrides
       timeoutSec: !ruby/object:Overrides::Ansible::PropertyOverride
         aliases:
           - timeout_seconds
+  RegionDiskResourcePolicyAttachment: !ruby/object:Overrides::Ansible::ResourceOverride
+    exclude: true
   DiskResourcePolicyAttachment: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
   Disk: !ruby/object:Overrides::Ansible::ResourceOverride
@@ -236,6 +244,8 @@ overrides: !ruby/object:Overrides::ResourceOverrides
       - 'products/compute/helpers/python/instance_start.py'
       - 'products/compute/helpers/python/instance_update_methods.py'
     properties:
+      disks.licenses: !ruby/object:Overrides::Ansible::PropertyOverride
+        exclude: true
       canIpForward: !ruby/object:Overrides::Ansible::PropertyOverride
         aliases: ["ip_forward"]
       disks.initializeParams.sourceImage: !ruby/object:Overrides::Ansible::PropertyOverride
@@ -315,11 +325,17 @@ overrides: !ruby/object:Overrides::ResourceOverrides
     exclude: true
   NetworkEndpoint: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
+  NetworkPeeringRoutesConfig: !ruby/object:Overrides::Ansible::ResourceOverride
+    exclude: true
+  ProjectInfo: !ruby/object:Overrides::Ansible::ResourceOverride
+    exclude: true
   Region: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
   RegionDiskType: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
   RegionHealthCheck: !ruby/object:Overrides::Ansible::ResourceOverride
+    exclude: true
+  RegionInstanceGroupManager: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true
   RegionSslCertificate: !ruby/object:Overrides::Ansible::ResourceOverride
     exclude: true

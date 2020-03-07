@@ -62,8 +62,24 @@ module Provider
       # This list corresponds to the `get*FromEnv` methods in provider_test.go.
       attr_reader :test_env_vars
 
-      # Hash to provider custom context for generating test config
-      attr_reader :test_custom_context
+      # Hash to provider custom override values for generating test config
+      # If field my-var is set in this hash, it will replace vars[my-var] in
+      # tests. i.e. if vars["network"] = "my-vpc", without override:
+      #   - doc config will have `network = "my-vpc"`
+      #   - tests config will have `"network = my-vpc%{random_suffix}"`
+      #     with context
+      #       map[string]interface{}{
+      #         "random_suffix": randString()
+      #       }
+      #
+      # If test_vars_overrides["network"] = "nameOfVpc()"
+      #   - doc config will have `network = "my-vpc"`
+      #   - tests will replace with `"network = %{network}"` with context
+      #       map[string]interface{}{
+      #         "network": nameOfVpc
+      #         ...
+      #       }
+      attr_reader :test_vars_overrides
 
       # The version name of of the example's version if it's different than the
       # resource version, eg. `beta`
@@ -140,9 +156,31 @@ module Provider
       def config_test_body
         @vars ||= {}
         @test_env_vars ||= {}
+        @test_vars_overrides ||= {}
+
+        # Construct map for vars to inject into config - will have
+        #   - "a-example-var-value%{random_suffix}""
+        #   - "%{my_var}" for overrides that have custom Golang values
+        rand_vars = vars.map do |k, v|
+          # Some resources only allow underscores.
+          testv = if v.include?('-')
+                    "tf-test-#{v}"
+                  elsif v.include?('_')
+                    "tf_test_#{v}"
+                  else
+                    # Some vars like descriptions shouldn't have prefix
+                    v
+                  end
+          # Random suffix is 10 characters and standard name length <= 64
+          testv = "#{testv[0...54]}%{random_suffix}"
+          [k, testv]
+        end
+
+        rand_vars = rand_vars.to_h
+        overrides = test_vars_overrides.map { |k, _| [k, "%{#{k}}"] }.to_h
         body = lines(compile_file(
                        {
-                         vars: vars.map { |k, str| [k, "#{str}%{random_suffix}"] }.to_h,
+                         vars: rand_vars.merge(overrides),
                          test_env_vars: test_env_vars.map { |k, _| [k, "%{#{k}}"] }.to_h,
                          primary_resource_id: primary_resource_id
                        },
@@ -182,12 +220,13 @@ module Provider
         )
       end
 
+      # rubocop:disable Metrics/LineLength
       def substitute_test_paths(config)
         config.gsub!('../static/img/header-logo.png', 'test-fixtures/header-logo.png')
         config.gsub!('path/to/private.key', 'test-fixtures/ssl_cert/test.key')
         config.gsub!('path/to/certificate.crt', 'test-fixtures/ssl_cert/test.crt')
         config.gsub!('path/to/index.zip', '%{zip_path}')
-        config.gsub!('verified-domain.com', '%{verified_domain}')
+        config.gsub!('verified-domain.com', 'tf-test-domain%{random_suffix}.gcp.tfacc.hashicorptest.com')
         config
       end
 
@@ -197,6 +236,7 @@ module Provider
         config.gsub!('path/to/certificate.crt', '../static/ssl_cert/test.crt')
         config
       end
+      # rubocop:enable Metrics/LineLength
       # rubocop:enable Style/FormatStringToken
 
       def validate
@@ -206,7 +246,7 @@ module Provider
         check :min_version, type: String
         check :vars, type: Hash
         check :test_env_vars, type: Hash
-        check :test_config_context, type: Hash
+        check :test_vars_overrides, type: Hash
         check :ignore_read_extra, type: Array, item_type: String, default: []
         check :primary_resource_name, type: String
         check :skip_test, type: TrueClass

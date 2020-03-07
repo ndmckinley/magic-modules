@@ -517,7 +517,7 @@ func TestAccComputeInstanceTemplate_subnet_xpn(t *testing.T) {
 	var instanceTemplate compute.InstanceTemplate
 	org := getTestOrgFromEnv(t)
 	billingId := getTestBillingAccountFromEnv(t)
-	projectName := fmt.Sprintf("tf-xpntest-%d", time.Now().Unix())
+	projectName := fmt.Sprintf("tf-testxpn-%d", time.Now().Unix())
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
@@ -814,6 +814,40 @@ func TestAccComputeInstanceTemplate_invalidDiskType(t *testing.T) {
 			{
 				Config:      testAccComputeInstanceTemplate_invalidDiskType(),
 				ExpectError: regexp.MustCompile("SCRATCH disks must have a disk_type of local-ssd"),
+			},
+		},
+	})
+}
+
+func TestAccComputeInstanceTemplate_imageResourceTest(t *testing.T) {
+	t.Parallel()
+	diskName := "tf-test-disk-" + acctest.RandString(10)
+	computeImage := "tf-test-image-" + acctest.RandString(10)
+	imageDesc1 := "Some description"
+	imageDesc2 := "Some other description"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckComputeInstanceTemplateDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccComputeInstanceTemplate_imageResourceTest(diskName, computeImage, imageDesc1),
+			},
+			{
+				ResourceName:            "google_compute_instance_template.foobar",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"name_prefix"},
+			},
+			{
+				Config: testAccComputeInstanceTemplate_imageResourceTest(diskName, computeImage, imageDesc2),
+			},
+			{
+				ResourceName:            "google_compute_instance_template.foobar",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"name_prefix"},
 			},
 		},
 	})
@@ -1760,7 +1794,7 @@ resource "google_compute_instance_template" "foobar" {
 func testAccComputeInstanceTemplate_secondaryAliasIpRange(i string) string {
 	return fmt.Sprintf(`
 resource "google_compute_network" "inst-test-network" {
-  name = "inst-test-network-%s"
+  name = "tf-test-network-%s"
 }
 
 resource "google_compute_subnetwork" "inst-test-subnetwork" {
@@ -2038,4 +2072,36 @@ resource "google_compute_instance_template" "foobar" {
   }
 }
 `, acctest.RandString(10))
+}
+
+func testAccComputeInstanceTemplate_imageResourceTest(diskName string, imageName string, imageDescription string) string {
+	return fmt.Sprintf(`
+data "google_compute_image" "my_image" {
+	family  = "debian-9"
+	project = "debian-cloud"
+}
+	
+resource "google_compute_disk" "my_disk" {
+	name  = "%s"
+	zone  = "us-central1-a"
+	image = data.google_compute_image.my_image.self_link
+}
+resource "google_compute_image" "diskimage" {
+	name = "%s"
+	description = "%s"
+	source_disk = google_compute_disk.my_disk.self_link
+}
+resource "google_compute_instance_template" "foobar" {
+	name_prefix = "tf-test-instance-"
+	machine_type         = "n1-standard-1"
+	disk {
+		source_image = google_compute_image.diskimage.self_link
+	}
+	network_interface {
+		network = "default"
+		access_config {}
+	}
+}
+	  
+`, diskName, imageName, imageDescription)
 }

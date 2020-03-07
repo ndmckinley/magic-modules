@@ -171,6 +171,18 @@ objects:
         update_url: 'projects/{{project}}/regions/{{region}}/addresses/{{name}}/setLabels'
         update_verb: :POST
         min_version: beta
+      - !ruby/object:Api::Type::Enum
+        name: 'status'
+        output: true
+        description: |
+          The status of the address, which can be one of RESERVING, RESERVED, or IN_USE.
+          An address that is RESERVING is currently in the process of being reserved.
+          A RESERVED address is currently reserved and available to use. An IN_USE address
+          is currently being used by another resource and is not available.
+        values:
+          - :RESERVING
+          - :RESERVED
+          - :IN_USE
   - !ruby/object:Api::Resource
     name: 'Autoscaler'
     kind: 'compute#autoscaler'
@@ -305,9 +317,7 @@ objects:
           - !ruby/object:Api::Type::Array
             name: 'customMetricUtilizations'
             description: |
-              Defines the CPU utilization policy that allows the autoscaler to
-              scale based on the average CPU utilization of a managed instance
-              group.
+              Configuration parameters of autoscaling based on a custom metric.
             item_type: !ruby/object:Api::Type::NestedObject
               properties:
               - !ruby/object:Api::Type::String
@@ -923,6 +933,7 @@ objects:
             properties:
               - !ruby/object:Api::Type::Boolean
                 name: 'includeHost'
+                send_empty_value: true
                 at_least_one_of:
                   - cdn_policy.0.cache_key_policy.0.include_host
                   - cdn_policy.0.cache_key_policy.0.include_protocol
@@ -933,6 +944,7 @@ objects:
                   If true requests to different hosts will be cached separately.
               - !ruby/object:Api::Type::Boolean
                 name: 'includeProtocol'
+                send_empty_value: true
                 at_least_one_of:
                   - cdn_policy.0.cache_key_policy.0.include_host
                   - cdn_policy.0.cache_key_policy.0.include_protocol
@@ -943,6 +955,7 @@ objects:
                   If true, http and https requests will be cached separately.
               - !ruby/object:Api::Type::Boolean
                 name: 'includeQueryString'
+                send_empty_value: true
                 at_least_one_of:
                   - cdn_policy.0.cache_key_policy.0.include_host
                   - cdn_policy.0.cache_key_policy.0.include_protocol
@@ -959,6 +972,7 @@ objects:
                   key entirely.
               - !ruby/object:Api::Type::Array
                 name: 'queryStringBlacklist'
+                send_empty_value: true
                 at_least_one_of:
                   - cdn_policy.0.cache_key_policy.0.include_host
                   - cdn_policy.0.cache_key_policy.0.include_protocol
@@ -974,6 +988,7 @@ objects:
                   delimiters.
                 item_type: Api::Type::String
               - !ruby/object:Api::Type::Array
+                send_empty_value: true
                 name: 'queryStringWhitelist'
                 at_least_one_of:
                   - cdn_policy.0.cache_key_policy.0.include_host
@@ -1535,8 +1550,14 @@ objects:
                 A multiplier applied to the group's maximum servicing capacity
                 (based on UTILIZATION, RATE or CONNECTION).
 
+                ~>**NOTE**: This field cannot be set for
+                INTERNAL region backend services (default loadBalancingScheme),
+                but is required for non-INTERNAL backend service. The total
+                capacity_scaler for all backends must be non-zero.
+
                 A setting of 0 means the group is completely drained, offering
                 0% of its available Capacity. Valid range is [0.0,1.0].
+              send_empty_value: true
             - !ruby/object:Api::Type::String
               name: 'description'
               description: |
@@ -1577,6 +1598,7 @@ objects:
               description: |
                 The max number of simultaneous connections for the group. Can
                 be used with either CONNECTION or UTILIZATION balancing modes.
+                Cannot be set for INTERNAL backend services.
 
                 For CONNECTION mode, either maxConnections or one
                 of maxConnectionsPerInstance or maxConnectionsPerEndpoint,
@@ -1585,26 +1607,29 @@ objects:
               name: 'maxConnectionsPerInstance'
               description: |
                 The max number of simultaneous connections that a single
-                backend instance can handle. This is used to calculate the
-                capacity of the group. Can be used in either CONNECTION or
-                UTILIZATION balancing modes.
+                backend instance can handle. Cannot be set for INTERNAL backend
+                services.
 
+                This is used to calculate the capacity of the group.
+                Can be used in either CONNECTION or UTILIZATION balancing modes.
                 For CONNECTION mode, either maxConnections or
                 maxConnectionsPerInstance must be set.
             - !ruby/object:Api::Type::Integer
               name: 'maxConnectionsPerEndpoint'
               description: |
                 The max number of simultaneous connections that a single backend
-                network endpoint can handle. This is used to calculate the
-                capacity of the group. Can be used in either CONNECTION or
-                UTILIZATION balancing modes.
+                network endpoint can handle. Cannot be set
+                for INTERNAL backend services.
 
-                For CONNECTION mode, either
-                maxConnections or maxConnectionsPerEndpoint must be set.
+                This is used to calculate the capacity of the group. Can be
+                used in either CONNECTION or UTILIZATION balancing modes. For
+                CONNECTION mode, either maxConnections or
+                maxConnectionsPerEndpoint must be set.
             - !ruby/object:Api::Type::Integer
               name: 'maxRate'
               description: |
-                The max requests per second (RPS) of the group.
+                The max requests per second (RPS) of the group. Cannot be set
+                for INTERNAL backend services.
 
                 Can be used with either RATE or UTILIZATION balancing modes,
                 but required if RATE mode. Either maxRate or one
@@ -1616,19 +1641,22 @@ objects:
                 The max requests per second (RPS) that a single backend
                 instance can handle. This is used to calculate the capacity of
                 the group. Can be used in either balancing mode. For RATE mode,
-                either maxRate or maxRatePerInstance must be set.
+                either maxRate or maxRatePerInstance must be set. Cannot be set
+                for INTERNAL backend services.
             - !ruby/object:Api::Type::Double
               name: 'maxRatePerEndpoint'
               description: |
                 The max requests per second (RPS) that a single backend network
                 endpoint can handle. This is used to calculate the capacity of
                 the group. Can be used in either balancing mode. For RATE mode,
-                either maxRate or maxRatePerEndpoint must be set.
+                either maxRate or maxRatePerEndpoint must be set. Cannot be set
+                for INTERNAL backend services.
             - !ruby/object:Api::Type::Double
               name: 'maxUtilization'
               description: |
                 Used when balancingMode is UTILIZATION. This ratio defines the
                 CPU utilization target for the group. Valid range is [0.0, 1.0].
+                Cannot be set for INTERNAL backend services.
       - !ruby/object:Api::Type::NestedObject
         name: 'circuitBreakers'
         description: |
@@ -2442,6 +2470,68 @@ objects:
           "10GB-10TB".
         output: true
   - !ruby/object:Api::Resource
+    name: 'RegionDiskResourcePolicyAttachment'
+    input: true
+    base_url: projects/{{project}}/regions/{{region}}/disks/{{disk}}
+    create_verb: :POST
+    create_url: projects/{{project}}/regions/{{region}}/disks/{{disk}}/addResourcePolicies
+    delete_verb: :POST
+    delete_url: projects/{{project}}/regions/{{region}}/disks/{{disk}}/removeResourcePolicies
+    self_link: projects/{{project}}/regions/{{region}}/disks/{{disk}}
+    nested_query: !ruby/object:Api::Resource::NestedQuery
+      keys:
+        - resourcePolicies
+      is_list_of_ids: true
+    identity:
+      - name
+    description: |
+      Disk resource policies define a schedule for taking snapshots and a
+      retention period for these snapshots.
+    async: !ruby/object:Api::OpAsync
+      operation: !ruby/object:Api::OpAsync::Operation
+        kind: 'compute#operation'
+        path: 'name'
+        base_url: 'projects/{{project}}/regions/{{region}}/operations/{{op_id}}'
+        wait_ms: 1000
+        timeouts: !ruby/object:Api::Timeouts
+          insert_minutes: 4
+          delete_minutes: 4
+      result: !ruby/object:Api::OpAsync::Result
+        path: 'targetLink'
+      status: !ruby/object:Api::OpAsync::Status
+        path: 'status'
+        complete: 'DONE'
+        allowed:
+          - 'PENDING'
+          - 'RUNNING'
+          - 'DONE'
+      error: !ruby/object:Api::OpAsync::Error
+        path: 'error/errors'
+        message: 'message'
+    parameters:
+      - !ruby/object:Api::Type::ResourceRef
+        name: 'disk'
+        resource: 'Disk'
+        imports: 'name'
+        description: |
+          The name of the regional disk in which the resource policies are attached to.
+        required: true
+        url_param_only: true
+      - !ruby/object:Api::Type::ResourceRef
+        name: 'region'
+        resource: 'Region'
+        imports: 'name'
+        description: 'A reference to the region where the disk resides.'
+        required: true
+        url_param_only: true
+    properties:
+      - !ruby/object:Api::Type::String
+        name: 'name'
+        description: |
+          The resource policy to be attached to the disk for scheduling snapshot
+          creation. Do not specify the self link.
+        required: true
+  - !ruby/object:Api::Resource
     name: 'DiskResourcePolicyAttachment'
     input: true
     base_url: projects/{{project}}/zones/{{zone}}/disks/{{disk}}
@@ -2972,7 +3062,7 @@ objects:
         properties:
           - !ruby/object:Api::Type::Boolean
             name: 'enableLogging'
-            send_empty_value: true
+            api_name: enable
             description: |
               This field denotes whether to enable logging for a particular
               firewall rule. If logging is enabled, logs will be exported to
@@ -3102,7 +3192,7 @@ objects:
       guides:
         'Official Documentation':
           'https://cloud.google.com/compute/docs/load-balancing/network/forwarding-rules'
-      api: 'https://cloud.google.com/compute/docs/reference/v1/forwardingRule'
+      api: 'https://cloud.google.com/compute/docs/reference/v1/forwardingRules'
     input: true
     async: !ruby/object:Api::OpAsync
       operation: !ruby/object:Api::OpAsync::Operation
@@ -3136,6 +3226,16 @@ objects:
         name: 'creationTimestamp'
         description: 'Creation timestamp in RFC3339 text format.'
         output: true
+      - !ruby/object:Api::Type::Boolean
+        name: 'isMirroringCollector'
+        description: |
+            Indicates whether or not this load balancer can be used
+            as a collector for packet mirroring. To prevent mirroring loops,
+            instances behind this load balancer will not have their traffic
+            mirrored even if a PacketMirroring rule applies to them. This
+            can only be set to true for load balancers that have their
+            loadBalancingScheme set to INTERNAL.
+        min_version: beta
       - !ruby/object:Api::Type::String
         name: 'description'
         description: |
@@ -3288,14 +3388,14 @@ objects:
           If the network specified is in auto subnet mode, this field is
           optional. However, if the network is in custom subnet mode, a
           subnetwork must be specified.
-      - !ruby/object:Api::Type::ResourceRef
+      # This is a multi-resource resource reference (TargetHttp(s)Proxy,
+      # TargetSslProxy, TargetTcpProxy, TargetVpnGateway, TargetPool,
+      # TargetInstance)
+      - !ruby/object:Api::Type::String
         name: 'target'
-        resource: 'TargetPool'
-        imports: 'selfLink'
         description: |
-          This field is only used for EXTERNAL load balancing.
-          A reference to a TargetPool resource to receive the matched traffic.
-          This target must live in the same region as the forwarding rule.
+          The URL of the target resource to receive the matched traffic.
+          The target must live in the same region as the forwarding rule.
           The forwarded traffic must be of a type appropriate to the target
           object.
         update_verb: :POST
@@ -4742,6 +4842,11 @@ objects:
               created from this template.
             item_type: !ruby/object:Api::Type::NestedObject
               properties:
+                - !ruby/object:Api::Type::Array
+                  name: 'licenses'
+                  description: Any applicable license URI.
+                  item_type: Api::Type::String
+                  output: true
                 - !ruby/object:Api::Type::Boolean
                   name: 'autoDelete'
                   description: |
@@ -5465,6 +5570,21 @@ objects:
           only value is RAW
         values:
           - :RAW
+      - !ruby/object:Api::Type::String
+        name: 'selfLink'
+        exclude: true
+        description: |
+          The self link of the image
+      - !ruby/object:Api::Type::Enum
+        name: 'status'
+        output: true
+        exclude: true
+        description: |
+          The status of the image. Either `READY` `PENDING` or `FAILED`.
+        values:
+          - :READY
+          - :PENDING
+          - :FAILED
       # State is not applicable for state convergence.
   - !ruby/object:Api::Resource
     name: 'Instance'
@@ -5694,6 +5814,11 @@ objects:
               values:
                 - :SCRATCH
                 - :PERSISTENT
+            - !ruby/object:Api::Type::Array
+              name: 'licenses'
+              description: 'Any applicable publicly visible licenses.'
+              item_type: Api::Type::String
+              output: true
       - !ruby/object:Api::Type::Array
         name: 'guestAccelerators'
         description: |
@@ -6352,6 +6477,212 @@ objects:
           group. Deleting or abandoning instances reduces this number. Resizing
           the group changes this number.
   - !ruby/object:Api::Resource
+    name: 'RegionInstanceGroupManager'
+    kind: 'compute#instanceGroupManager'
+    base_url: projects/{{project}}/regions/{{region}}/instanceGroupManagers
+    collection_url_key: 'items'
+    has_self_link: true
+    description: |
+      Creates a managed instance group using the information that you specify in
+      the request. After the group is created, it schedules an action to create
+      instances in the group using the specified instance template. This
+      operation is marked as DONE when the group is created even if the
+      instances in the group have not yet been created. You must separately
+      verify the status of the individual instances.
+
+      A managed instance group can have up to 1000 VM instances per group.
+    async: !ruby/object:Api::OpAsync
+      operation: !ruby/object:Api::OpAsync::Operation
+        kind: 'compute#operation'
+        path: 'name'
+        base_url: 'projects/{{project}}/regions/{{region}}/operations/{{op_id}}'
+        wait_ms: 1000
+      result: !ruby/object:Api::OpAsync::Result
+        path: 'targetLink'
+      status: !ruby/object:Api::OpAsync::Status
+        path: 'status'
+        complete: 'DONE'
+        allowed:
+          - 'PENDING'
+          - 'RUNNING'
+          - 'DONE'
+      error: !ruby/object:Api::OpAsync::Error
+        path: 'error/errors'
+        message: 'message'
+    parameters:
+      - !ruby/object:Api::Type::ResourceRef
+        name: 'region'
+        resource: 'Region'
+        imports: 'name'
+        description: 'The region the managed instance group resides.'
+        required: true
+    properties:
+      - !ruby/object:Api::Type::String
+        name: 'baseInstanceName'
+        description: |
+          The base instance name to use for instances in this group. The value
+          must be 1-58 characters long. Instances are named by appending a
+          hyphen and a random four-character string to the base instance name.
+          The base instance name must comply with RFC1035.
+        required: true
+      - !ruby/object:Api::Type::Time
+        name: 'creationTimestamp'
+        description: |
+          The creation timestamp for this managed instance group in RFC3339
+          text format.
+        output: true
+      - !ruby/object:Api::Type::NestedObject
+        name: 'currentActions'
+        description: |
+          The list of instance actions and the number of instances in this
+          managed instance group that are scheduled for each of those actions.
+        properties:
+          - !ruby/object:Api::Type::Integer
+            name: 'abandoning'
+            description: |
+              The total number of instances in the managed instance group that
+              are scheduled to be abandoned. Abandoning an instance removes it
+              from the managed instance group without deleting it.
+            output: true
+          - !ruby/object:Api::Type::Integer
+            name: 'creating'
+            description: |
+              The number of instances in the managed instance group that are
+              scheduled to be created or are currently being created. If the
+              group fails to create any of these instances, it tries again until
+              it creates the instance successfully.
+
+              If you have disabled creation retries, this field will not be
+              populated; instead, the creatingWithoutRetries field will be
+              populated.
+            output: true
+          - !ruby/object:Api::Type::Integer
+            name: 'creatingWithoutRetries'
+            description: |
+              The number of instances that the managed instance group will
+              attempt to create. The group attempts to create each instance only
+              once. If the group fails to create any of these instances, it
+              decreases the group's targetSize value accordingly.
+            output: true
+          - !ruby/object:Api::Type::Integer
+            name: 'deleting'
+            description: |
+              The number of instances in the managed instance group that are
+              scheduled to be deleted or are currently being deleted.
+            output: true
+          - !ruby/object:Api::Type::Integer
+            name: 'none'
+            description: |
+              The number of instances in the managed instance group that are
+              running and have no scheduled actions.
+            output: true
+          - !ruby/object:Api::Type::Integer
+            name: 'recreating'
+            description: |
+              The number of instances in the managed instance group that are
+              scheduled to be recreated or are currently being being recreated.
+              Recreating an instance deletes the existing root persistent disk
+              and creates a new disk from the image that is defined in the
+              instance template.
+            output: true
+          - !ruby/object:Api::Type::Integer
+            name: 'refreshing'
+            description: |
+              The number of instances in the managed instance group that are
+              being reconfigured with properties that do not require a restart
+              or a recreate action. For example, setting or removing target
+              pools for the instance.
+            output: true
+          - !ruby/object:Api::Type::Integer
+            name: 'restarting'
+            description: |
+              The number of instances in the managed instance group that are
+              scheduled to be restarted or are currently being restarted.
+            output: true
+        output: true
+      - !ruby/object:Api::Type::String
+        name: 'description'
+        description: |
+          An optional description of this resource. Provide this property when
+          you create the resource.
+        input: true
+      # fingerprint ignored as it is an internal locking detail
+      - !ruby/object:Api::Type::Integer
+        name: 'id'
+        description: 'A unique identifier for this resource'
+        output: true
+      - !ruby/object:Api::Type::ResourceRef
+        name: 'instanceGroup'
+        resource: 'InstanceGroup'
+        imports: 'selfLink'
+        description: 'The instance group being managed'
+        output: true
+      - !ruby/object:Api::Type::ResourceRef
+        name: 'instanceTemplate'
+        resource: 'InstanceTemplate'
+        imports: 'selfLink'
+        description: |
+          The instance template that is specified for this managed instance
+          group. The group uses this template to create all new instances in the
+          managed instance group.
+        required: true
+      # kind is internal transport detail
+      - !ruby/object:Api::Type::String
+        name: 'name'
+        description: |
+          The name of the managed instance group. The name must be 1-63
+          characters long, and comply with RFC1035.
+        required: true
+      # TODO(nelsonjr): Make namedPorts a NameValue(name[string], port[integer])
+      - !ruby/object:Api::Type::Array
+        name: 'namedPorts'
+        description:
+          Named ports configured for the Instance Groups complementary to this
+          Instance Group Manager.
+        item_type: !ruby/object:Api::Type::NestedObject
+          properties:
+            - !ruby/object:Api::Type::String
+              name: 'name'
+              description: |
+                The name for this named port. The name must be 1-63 characters
+                long, and comply with RFC1035.
+            - !ruby/object:Api::Type::Integer
+              name: 'port'
+              description:
+                The port number, which can be a value between 1 and 65535.
+      - !ruby/object:Api::Type::Array
+        name: 'targetPools'
+        description: |
+          TargetPool resources to which instances in the instanceGroup field are
+          added. The target pools automatically apply to all of the instances in
+          the managed instance group.
+        item_type: !ruby/object:Api::Type::ResourceRef
+          name: 'targetPool'
+          description: 'The targetPool to receive managed instances.'
+          resource: 'TargetPool'
+          imports: 'selfLink'
+      - !ruby/object:Api::Type::Integer
+        name: 'targetSize'
+        description: |
+          The target number of running instances for this managed instance
+          group. Deleting or abandoning instances reduces this number. Resizing
+          the group changes this number.
+      - !ruby/object:Api::Type::Array
+        name: 'autoHealingPolicies'
+        description: |
+          The autohealing policy for this managed instance group
+        item_type: !ruby/object:Api::Type::NestedObject
+          properties:
+            - !ruby/object:Api::Type::String
+              name: 'healthCheck'
+              description: |
+                The URL for the health check that signals autohealing.
+            - !ruby/object:Api::Type::Integer
+              name: 'initialDelaySec'
+              description: |
+                The number of seconds that the managed instance group waits
+                before it applies autohealing policies to new instances or recently recreated instances
+  - !ruby/object:Api::Resource
     name: 'InterconnectAttachment'
     kind: 'compute#interconnectAttachment'
     base_url: 'projects/{{project}}/regions/{{region}}/interconnectAttachments'
@@ -6367,6 +6698,9 @@ objects:
         path: 'name'
         base_url: 'projects/{{project}}/regions/{{region}}/operations/{{op_id}}'
         wait_ms: 1000
+        timeouts: !ruby/object:Api::Timeouts
+          insert_minutes: 10
+          delete_minutes: 10
       result: !ruby/object:Api::OpAsync::Result
         path: 'targetLink'
       status: !ruby/object:Api::OpAsync::Status
@@ -7025,6 +7359,77 @@ objects:
         required: true
         send_empty_value: true
   - !ruby/object:Api::Resource
+    name: 'NetworkPeeringRoutesConfig'
+    base_url:  'projects/{{project}}/global/networks/{{network}}'
+    self_link: 'projects/{{project}}/global/networks/{{network}}'
+    description: |
+      Manage a network peering's route settings without managing the peering as
+      a whole. This resource is primarily intended for use with GCP-generated
+      peerings that shouldn't otherwise be managed by other tools. Deleting this
+      resource is a no-op and the peering will not be modified.
+    create_verb: :PATCH
+    create_url: 'projects/{{project}}/global/networks/{{network}}/updatePeering'
+    update_verb: :PATCH
+    update_url: 'projects/{{project}}/global/networks/{{network}}/updatePeering'
+    identity:
+      - peering
+    nested_query: !ruby/object:Api::Resource::NestedQuery
+      keys:
+        - peerings
+    references: !ruby/object:Api::Resource::ReferenceLinks
+      guides:
+        'Official Documentation': 'https://cloud.google.com/vpc/docs/vpc-peering'
+      api: 'https://cloud.google.com/compute/docs/reference/rest/v1/networks/updatePeering'
+    async: !ruby/object:Api::OpAsync
+      operation: !ruby/object:Api::OpAsync::Operation
+        kind: 'compute#operation'
+        path: 'name'
+        base_url: 'projects/{{project}}/global/operations/{{op_id}}'
+        wait_ms: 1000
+        timeouts: !ruby/object:Api::Timeouts
+          insert_minutes: 6
+          update_minutes: 6
+          delete_minutes: 6
+      result: !ruby/object:Api::OpAsync::Result
+        path: 'targetLink'
+      status: !ruby/object:Api::OpAsync::Status
+        path: 'status'
+        complete: 'DONE'
+        allowed:
+          - 'PENDING'
+          - 'RUNNING'
+          - 'DONE'
+      error: !ruby/object:Api::OpAsync::Error
+        path: 'error/errors'
+        message: 'message'
+    parameters:
+      - !ruby/object:Api::Type::ResourceRef
+        name: 'network'
+        resource: 'Network'
+        imports: 'name'
+        description: |
+          The name of the primary network for the peering.
+        required: true
+        url_param_only: true
+    properties:
+      - !ruby/object:Api::Type::String
+        name: 'peering'
+        # renamed to make it clear that this is an existing peering
+        api_name: 'name'
+        required: true
+        description: |
+          Name of the peering.
+      - !ruby/object:Api::Type::Boolean
+        name: 'exportCustomRoutes'
+        required: true
+        description: |
+          Whether to export the custom routes to the peer network.
+      - !ruby/object:Api::Type::Boolean
+        name: 'importCustomRoutes'
+        required: true
+        description: |
+          Whether to import the custom routes to the peer network.
+  - !ruby/object:Api::Resource
     name: 'NodeTemplate'
     kind: 'compute#nodeTemplate'
     base_url: projects/{{project}}/regions/{{region}}/nodeTemplates
@@ -7143,6 +7548,225 @@ objects:
             values:
               - :RESTART_NODE_ON_ANY_SERVER
               - :RESTART_NODE_ON_MINIMAL_SERVERS
+  - !ruby/object:Api::Resource
+    name: 'PacketMirroring'
+    min_version: beta
+    base_url: projects/{{project}}/regions/{{region}}/packetMirrorings
+    update_verb: :PATCH
+    self_link: projects/{{project}}/regions/{{region}}/packetMirrorings/{{name}}
+    references: !ruby/object:Api::Resource::ReferenceLinks
+      guides:
+        'Using Packet Mirroring': 'https://cloud.google.com/vpc/docs/using-packet-mirroring#creating'
+      api: 'https://cloud.google.com/compute/docs/reference/rest/v1/packetMirroring'
+    description: |
+      Packet Mirroring mirrors traffic to and from particular VM instances.
+      You can use the collected traffic to help you detect security threats
+      and monitor application performance.
+    async: !ruby/object:Api::OpAsync
+      operation: !ruby/object:Api::OpAsync::Operation
+        kind: 'compute#operation'
+        path: 'name'
+        base_url: 'projects/{{project}}/regions/{{region}}/operations/{{op_id}}'
+        wait_ms: 1000
+      result: !ruby/object:Api::OpAsync::Result
+        path: 'targetLink'
+      status: !ruby/object:Api::OpAsync::Status
+        path: 'status'
+        complete: 'DONE'
+        allowed:
+          - 'PENDING'
+          - 'RUNNING'
+          - 'DONE'
+      error: !ruby/object:Api::OpAsync::Error
+        path: 'error/errors'
+        message: 'message'
+
+    properties:
+      - !ruby/object:Api::Type::String
+        name: name
+        description: The name of the packet mirroring rule
+        required: true
+      - !ruby/object:Api::Type::String
+        name: description 
+        description: A human-readable description of the rule.
+        input: true
+      - !ruby/object:Api::Type::String
+        name: region
+        description: The region where this rule is active.
+        required: true
+      - !ruby/object:Api::Type::NestedObject
+        name: network
+        description: |
+            Specifies the mirrored VPC network. Only packets in this network
+            will be mirrored. All mirrored VMs should have a NIC in the given
+            network. All mirrored subnetworks should belong to the given network.
+        properties:
+          - !ruby/object:Api::Type::ResourceRef
+            name: url
+            description: The full self_link URL of the network where this rule is active.
+            resource: 'Network'
+            imports: 'selfLink'
+            required: true
+        required: true
+      - !ruby/object:Api::Type::Integer
+        name: priority
+        description: |
+            Since only one rule can be active at a time, priority is
+            used to break ties in the case of two rules that apply to
+            the same instances.
+        required: true
+      - !ruby/object:Api::Type::NestedObject
+        name: collectorIlb
+        description: |
+            The Forwarding Rule resource (of type loadBalancingScheme=INTERNAL)
+            that will be used as collector for mirrored traffic. The
+            specified forwarding rule must have isMirroringCollector
+            set to true.
+        required: true
+        properties:
+          - !ruby/object:Api::Type::ResourceRef
+            name: url
+            required: true
+            resource: 'ForwardingRule'
+            imports: 'selfLink'
+            description: The URL of the forwarding rule.
+      - !ruby/object:Api::Type::NestedObject
+        name: filter 
+        description: |
+            A filter for mirrored traffic.  If unset, all traffic is mirrored.
+        properties:
+          - !ruby/object:Api::Type::Array
+            name: ipProtocols
+            api_name: 'IPProtocols'
+            description: |
+                Protocols that apply as a filter on mirrored traffic.
+            item_type: !ruby/object:Api::Type::Enum
+              name: ipProtocols
+              description: Possible IP protocols to filter on.
+              values:
+                - tcp
+                - udp
+                - icmp
+          - !ruby/object:Api::Type::Array
+            name: cidrRanges
+            description: |
+                IP CIDR ranges that apply as a filter on the source (ingress) or
+                destination (egress) IP in the IP header. Only IPv4 is supported.
+            item_type: Api::Type::String
+      - !ruby/object:Api::Type::NestedObject
+        name: mirroredResources
+        required: true
+        description: |
+            A means of specifying which resources to mirror.
+        properties:
+          - !ruby/object:Api::Type::Array
+            name: subnetworks
+            at_least_one_of:
+                - mirrored_resources.0.subnetworks
+                - mirrored_resources.0.instances
+                - mirrored_resources.0.tags
+            description: |
+                All instances in one of these subnetworks will be mirrored.
+            item_type: !ruby/object:Api::Type::NestedObject
+              name: subnetworks
+              description: The subnetworks that should be mirrored.  Specify at most 5.
+              properties:
+                - !ruby/object:Api::Type::ResourceRef
+                  name: url
+                  resource: 'Subnetwork'
+                  imports: 'selfLink'
+                  description: The URL of the subnetwork where this rule should be active.
+                  required: true
+          - !ruby/object:Api::Type::Array
+            name: instances
+            description: |
+                All the listed instances will be mirrored.  Specify at most 50.
+            at_least_one_of:
+                - mirrored_resources.0.subnetworks
+                - mirrored_resources.0.instances
+                - mirrored_resources.0.tags
+            item_type: !ruby/object:Api::Type::NestedObject
+              name: instances
+              description: The instances that should be mirrored.
+              properties:
+                - !ruby/object:Api::Type::ResourceRef
+                  name: url
+                  resource: 'Instance'
+                  imports: 'selfLink'
+                  description: The URL of the instances where this rule should be active.
+                  required: true
+          - !ruby/object:Api::Type::Array
+            name: tags
+            at_least_one_of:
+                - mirrored_resources.0.subnetworks
+                - mirrored_resources.0.instances
+                - mirrored_resources.0.tags
+            description: |
+                All instances with these tags will be mirrored.
+            item_type: Api::Type::String
+ 
+  - !ruby/object:Api::Resource
+    name: 'ProjectInfo'
+    base_url: projects
+    self_link: projects/{{project}}
+    readonly: true
+    description: |
+      Information about the project specifically for compute.
+    properties:
+      - !ruby/object:Api::Type::String
+        name: name
+        description: The name of this project
+      - !ruby/object:Api::Type::NestedObject
+        name: 'commonInstanceMetadata'
+        description: 'Metadata shared for all instances in this project'
+        properties:
+          - !ruby/object:Api::Type::Array
+            name: 'items'
+            description: |
+              Array of key/values
+            item_type: !ruby/object:Api::Type::NestedObject
+              properties:
+                - !ruby/object:Api::Type::String
+                  name: 'key'
+                  description: 'Key of the metadata key/value pair'
+                - !ruby/object:Api::Type::String
+                  name: 'value'
+                  description: 'Value of the metadata key/value pair'
+      - !ruby/object:Api::Type::Array
+        name: 'enabledFeatures'
+        description: |
+          Restricted features enabled for use on this project
+        item_type: Api::Type::String
+      - !ruby/object:Api::Type::String
+        name: defaultServiceAccount
+        description: Default service account used by VMs in this project
+      - !ruby/object:Api::Type::String
+        name: xpnProjectStatus
+        description: The role this project has in a shared VPC configuration.
+      - !ruby/object:Api::Type::String
+        name: defaultNetworkTier
+        description: The default network tier used for configuring resources in this project
+      - !ruby/object:Api::Type::Array
+        name: 'quotas'
+        description: |
+          Quotas applied to this project
+        item_type: !ruby/object:Api::Type::NestedObject
+          properties:
+            - !ruby/object:Api::Type::String
+              name: 'metric'
+              description: 'Name of the quota metric'
+            - !ruby/object:Api::Type::String
+              name: 'limit'
+              description: 'Quota limit for this metric'
+            - !ruby/object:Api::Type::String
+              name: 'usage'
+              description: 'Current usage of this metric'
+            - !ruby/object:Api::Type::String
+              name: 'owner'
+              description: Owning resource. This is the resource on which this quota is applied.
+      - !ruby/object:Api::Type::Time
+        name: 'creationTimestamp'
+        description: 'Creation timestamp in RFC3339 text format.'
   - !ruby/object:Api::Resource
     name: 'Region'
     kind: 'compute#region'
@@ -7382,9 +8006,7 @@ objects:
           - !ruby/object:Api::Type::Array
             name: 'customMetricUtilizations'
             description: |
-              Defines the CPU utilization policy that allows the autoscaler to
-              scale based on the average CPU utilization of a managed instance
-              group.
+              Configuration parameters of autoscaling based on a custom metric.
             item_type: !ruby/object:Api::Type::NestedObject
               properties:
               - !ruby/object:Api::Type::String
@@ -9854,8 +10476,9 @@ objects:
                     name: 'startTime'
                     description: |
                       Time within the window to start the operations.
-                      It must be in format "HH:MM",
-                      where HH : [00-23] and MM : [00-00] GMT.
+                      It must be in an hourly format "HH:MM",
+                      where HH : [00-23] and MM : [00] GMT.
+                      eg: 21:00
                     required: true
               - !ruby/object:Api::Type::NestedObject
                 name: 'dailySchedule'
@@ -9956,7 +10579,8 @@ objects:
                   - snapshot_schedule_policy.0.snapshot_properties.0.guest_flush
                 max_size: 1
                 description: |
-                  GCS bucket location in which to store the snapshot (regional or multi-regional).
+                  Cloud Storage bucket location to store the auto snapshot
+                  (regional or multi-regional)
                 item_type: Api::Type::String
               - !ruby/object:Api::Type::Boolean
                 name: 'guestFlush'
@@ -10388,7 +11012,6 @@ objects:
           A list of URLs of the IP resources to be drained. These IPs must be
           valid static external IPs that have been assigned to the NAT.
         send_empty_value: true
-        min_version: beta
         item_type: !ruby/object:Api::Type::ResourceRef
           name: 'address'
           resource: 'Address'
@@ -11555,6 +12178,9 @@ objects:
           logs will be exported to Stackdriver. This field cannot be set if the `purpose` of this
           subnetwork is `INTERNAL_HTTPS_LOAD_BALANCER`
         properties:
+          - !ruby/object:Api::Type::Boolean
+            name: 'enable'
+            description: If logging is enabled for this subnetwork
           - !ruby/object:Api::Type::Enum
             name: 'aggregationInterval'
             at_least_one_of:
@@ -14314,4 +14940,9 @@ objects:
         values:
           - :UP
           - :DOWN
+        output: true
+      - !ruby/object:Api::Type::Array
+        name: 'availableCpuPlatforms'
+        description: 'The available CPU platforms in this zone'
+        item_type: Api::Type::String
         output: true

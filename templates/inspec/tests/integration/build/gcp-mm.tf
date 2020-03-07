@@ -74,10 +74,6 @@ variable "target_tcp_proxy" {
   type = any
 }
 
-variable "regional_cluster" {
-  type = any
-}
-
 variable "route" {
   type = any
 }
@@ -475,20 +471,6 @@ resource "google_compute_target_tcp_proxy" "gcp-inspec-target-tcp-proxy" {
   backend_service = google_compute_backend_service.gcp-inspec-tcp-backend-service.self_link
 }
 
-resource "google_container_cluster" "gcp-inspec-regional-cluster" {
-  project = var.gcp_project_id
-  name = var.regional_cluster["name"]
-  location = var.gcp_location
-  initial_node_count = 1
-  remove_default_node_pool = true
-
-  maintenance_policy {
-    daily_maintenance_window {
-      start_time = "23:00"
-    }
-  }
-}
-
 resource "google_compute_route" "gcp-inspec-route" {
   project     = var.gcp_project_id
   name        = var.route["name"]
@@ -629,11 +611,11 @@ resource "google_compute_backend_bucket" "image_backend" {
   enable_cdn  = var.backend_bucket["enable_cdn"]
 }
 
-resource "google_container_node_pool" "inspec-gcp-regional-node-pool" {
+resource "google_container_node_pool" "inspec-gcp-node-pool" {
   project    = var.gcp_project_id
   name       = var.regional_node_pool["name"]
-  location   = var.gcp_location
-  cluster    = google_container_cluster.gcp-inspec-regional-cluster.name
+  location   = google_container_cluster.primary.location
+  cluster    = google_container_cluster.primary.name
   node_count = var.regional_node_pool["node_count"]
 }
 
@@ -649,9 +631,26 @@ resource "google_logging_organization_sink" "my-sink" {
   filter      = var.org_sink.filter
 }
 
+variable "project_sink" {
+  type = any
+}
+
+resource "google_logging_project_sink" "project-logging-sink" {
+  count = var.gcp_enable_privileged_resources
+  project = var.gcp_project_id
+
+  name = var.project_sink.name
+  destination = "storage.googleapis.com/${google_storage_bucket.project-logging-bucket[0].name}"
+
+  filter = var.project_sink.filter
+
+  unique_writer_identity = true
+}
+
 resource "google_storage_bucket" "bucket" {
   name          = "inspec-gcp-static-${var.gcp_project_id}"
   project       = var.gcp_project_id
+  location      = var.gcp_location
   force_destroy = true
 }
 
@@ -662,6 +661,7 @@ resource "google_storage_bucket_object" "object" {
 }
 
 resource "google_app_engine_standard_app_version" "default" {
+  count = "${var.gcp_organization_id == "" ? 0 : var.gcp_enable_privileged_resources}"
   project         = var.gcp_project_id
   version_id      = var.standardappversion["version_id"]
   service         = var.standardappversion["service"]
@@ -766,6 +766,20 @@ resource "google_logging_folder_exclusion" "my-exclusion" {
   description = var.folder_exclusion["description"]
 
   filter      = var.folder_exclusion["filter"]
+}
+
+variable "project_exclusion" {
+  type = any
+}
+
+resource "google_logging_project_exclusion" "project-exclusion" {
+  count       = "${var.gcp_organization_id == "" ? 0 : var.gcp_enable_privileged_resources}"
+  name        = var.project_exclusion["name"]
+  project     = var.gcp_project_id
+
+  description = var.project_exclusion["description"]
+
+  filter      = var.project_exclusion["filter"]
 }
 
 resource "google_filestore_instance" "instance" {
@@ -948,4 +962,252 @@ resource "google_access_context_manager_access_policy" "access-policy" {
   count  = "${var.gcp_organization_id == "" ? 0 : var.gcp_enable_privileged_resources}"
   parent = "organizations/${var.gcp_organization_id}"
   title  = var.service_perimeter["policy_title"]
+}
+
+variable "firewall" {
+  type = any
+}
+
+resource "google_compute_firewall" "mm-firewall" {
+  project  = var.gcp_project_id
+  name = var.firewall["name"]
+  enable_logging = true
+  network = google_compute_network.inspec-gcp-network.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80", "8080", "1000-2000"]
+  }
+
+  source_tags = [var.firewall["source_tag"]]
+}
+
+variable "address" {
+  type = any
+}
+
+resource "google_compute_address" "internal_with_subnet_and_address" {
+  project      = var.gcp_project_id
+  name         = var.address["name"]
+  subnetwork   = google_compute_subnetwork.inspec-gcp-subnetwork.self_link
+  address_type = var.address["address_type"]
+  address      = var.address["address"]
+  region       = var.gcp_location
+}
+
+variable "instance_group" {
+  type = any
+}
+
+resource "google_compute_instance_group" "inspec-instance-group" {
+  project     = var.gcp_project_id
+  zone        = var.gcp_zone
+  name        = var.instance_group["name"]
+  description = var.instance_group["description"]
+
+  named_port {
+    name = var.instance_group["named_port_name"]
+    port = var.instance_group["named_port_port"]
+  }
+}
+
+variable "instance" {
+  type = any
+}
+
+resource "google_compute_instance" "inspec-instance" {
+  project      = var.gcp_project_id
+  zone         = var.gcp_zone
+  name         = var.instance["name"]
+  machine_type = var.instance["machine_type"]
+
+  tags = [var.instance["tag_1"], var.instance["tag_2"]]
+
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-9"
+    }
+  }
+
+  network_interface {
+    network = "default"
+
+    access_config {
+      // Ephemeral IP
+    }
+  }
+
+  metadata = {
+    "${var.instance["metadata_key"]}" = var.instance["metadata_value"]
+  }
+
+  metadata_startup_script = var.instance["startup_script"]
+
+  service_account {
+    scopes = [var.instance["sa_scope"]]
+  }
+}
+
+variable "network" {
+  type = any
+}
+
+resource "google_compute_network" "inspec-network" {
+  project      = var.gcp_project_id
+  name         = var.network["name"]
+  routing_mode = var.network["routing_mode"]
+}
+
+variable "subnetwork" {
+  type = any
+}
+
+resource "google_compute_subnetwork" "subnet-with-logging" {
+  project       = var.gcp_project_id
+  region        = var.gcp_location
+  name          = var.subnetwork["name"]
+  ip_cidr_range = var.subnetwork["ip_cidr_range"]
+  network       = google_compute_network.inspec-network.self_link
+
+  log_config {
+    aggregation_interval = var.subnetwork["log_interval"]
+    flow_sampling        = var.subnetwork["log_sampling"]
+    metadata             = var.subnetwork["log_metadata"]
+  }
+}
+
+variable "rigm" {
+  type = any
+}
+
+resource "google_compute_region_instance_group_manager" "inspec-rigm" {
+  project                    = var.gcp_project_id
+  region                     = var.gcp_location  
+  name                       = var.rigm["name"]
+
+  base_instance_name         = var.rigm["base_instance_name"]
+
+  version {
+    instance_template = google_compute_instance_template.gcp-inspec-instance-template.self_link
+  }
+
+  target_pools = [google_compute_target_pool.gcp-inspec-target-pool.self_link]
+  target_size  = var.rigm["target_size"]
+
+  named_port {
+    name = var.rigm["named_port_name"]
+    port = var.rigm["named_port_port"]
+  }
+
+  auto_healing_policies {
+    health_check      = google_compute_health_check.gcp-inspec-health-check.self_link
+    initial_delay_sec = var.rigm["healing_delay"]
+  }
+}
+
+variable "vpn_tunnel" {
+  type = any
+}
+
+resource "google_compute_vpn_tunnel" "tunnel1" {
+  project       = var.gcp_project_id
+  name          = var.vpn_tunnel["name"]
+  peer_ip       = var.vpn_tunnel["peer_ip"]
+  shared_secret = var.vpn_tunnel["shared_secret"]
+
+  remote_traffic_selector = ["0.0.0.0/0"]
+  local_traffic_selector  = ["0.0.0.0/0"]
+  target_vpn_gateway = google_compute_vpn_gateway.inspec-gcp-vpn-gateway.self_link
+
+  depends_on = [
+    google_compute_forwarding_rule.inspec-gcp-fr-esp,
+    google_compute_forwarding_rule.inspec-gcp-fr-udp500,
+    google_compute_forwarding_rule.inspec-gcp-fr-udp4500,
+  ]
+}
+
+variable "alert_policy" {
+  type = any
+}
+
+resource "google_monitoring_alert_policy" "alert_policy" {
+  project      = var.gcp_project_id
+  display_name = var.alert_policy["display_name"]
+  combiner     = var.alert_policy["combiner"]
+  conditions {
+    display_name = var.alert_policy["condition_display_name"]
+    condition_threshold {
+      filter     = var.alert_policy["condition_filter"]
+      duration   = var.alert_policy["condition_duration"]
+      comparison = var.alert_policy["condition_comparison"]
+      aggregations {
+        alignment_period   = "60s"
+        per_series_aligner = "ALIGN_RATE"
+      }
+    }
+  }
+}
+
+variable "dns_managed_zone" {
+  type = any
+}
+
+variable "gcp_dns_zone_name" {}
+
+resource "google_dns_managed_zone" "example-zone" {
+  project     = var.gcp_project_id
+  name        = var.dns_managed_zone["name"]
+  dns_name    = "${var.gcp_dns_zone_name}"
+  description = var.dns_managed_zone["description"]
+  dnssec_config {
+    state = var.dns_managed_zone["dnssec_config_state"]
+    default_key_specs {
+      algorithm = "rsasha256"
+      key_type = "zoneSigning"
+      key_length = 2048
+    }
+    default_key_specs {
+      algorithm = "rsasha512"
+      key_type = "keySigning"
+      key_length = 2048
+    }
+  }
+}
+
+variable "logging_metric" {
+  type = any
+}
+
+resource "google_logging_metric" "logging_metric" {
+  project = var.gcp_project_id
+  name    = var.logging_metric["name"]
+  filter  = var.logging_metric["filter"]
+  metric_descriptor {
+    metric_kind = var.logging_metric["metric_kind"]
+    value_type  = var.logging_metric["value_type"]
+  }
+}
+
+variable "compute_image" {
+  type = any
+}
+
+resource "google_compute_image" "example" {
+  project = var.gcp_project_id
+  name    = var.compute_image["name"]
+
+  raw_disk {
+    source = var.compute_image["source"]
+  }
+}
+
+variable "gcp_organization_iam_custom_role_id" {}
+
+resource "google_organization_iam_custom_role" "generic_org_iam_custom_role" {
+  count = var.gcp_enable_privileged_resources
+  org_id      = var.gcp_organization_id
+  role_id     = var.gcp_organization_iam_custom_role_id
+  title       = "GCP Inspec Generic Organization IAM Custom Role"
+  description = "Custom role allowing to list IAM roles only"
+  permissions = ["iam.roles.list"]
 }

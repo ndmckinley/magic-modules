@@ -25,6 +25,13 @@ module Overrides
           product_url
           privileged
           singular_only
+          singular_extra_examples
+          plural_extra_examples
+          plural_custom_logic
+          plural_custom_attr_readers
+          resource_name
+          singular_custom_constructor
+          plural_fetch_verb
         ]
       end
 
@@ -39,6 +46,27 @@ module Overrides
         # resource manager Folder is an example of a privileged resource
         check :privileged, type: :boolean, default: false
         check :singular_only, type: :boolean, default: false
+        # Points to a markdown file with extra examples to include in documentation
+        check :singular_extra_examples, type: String
+        # Points to a markdown file with extra examples to include in plural documentation
+        check :plural_extra_examples, type: String
+        # Custom logic injected into plural resource's parse method.
+        # Allows for multiple interpretations of a single field within an API response
+        check :plural_custom_logic, type: String
+
+        # Attribute readers to add to plural resource to access fields added via
+        # plural_custom_logic
+        check :plural_custom_attr_readers, type: ::Array, default: [], item_type: String
+
+        # Overrides the resource name. In some cases we need to match legacy resources which
+        # do not have product namespaces, or other irregularities
+        check :resource_name, type: String
+
+        # Compute image checks two different endpoints to see if one returns a success.
+        # This is strange, but preserves existing functionality
+        check :singular_custom_constructor, type: String
+        # Some resources (organizations) use Post instead of Get for fetching their plural version
+        check :plural_fetch_verb, type: Symbol, default: :GET, allowed: %i[POST GET]
       end
     end
   end

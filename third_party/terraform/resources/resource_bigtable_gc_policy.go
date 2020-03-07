@@ -24,9 +24,10 @@ func resourceBigtableGCPolicy() *schema.Resource {
 
 		Schema: map[string]*schema.Schema{
 			"instance_name": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:             schema.TypeString,
+				Required:         true,
+				ForceNew:         true,
+				DiffSuppressFunc: compareResourceNames,
 			},
 
 			"table": {
@@ -95,11 +96,12 @@ func resourceBigtableGCPolicyCreate(d *schema.ResourceData, meta interface{}) er
 		return err
 	}
 
-	instanceName := d.Get("instance_name").(string)
+	instanceName := GetResourceNameFromSelfLink(d.Get("instance_name").(string))
 	c, err := config.bigtableClientFactory.NewAdminClient(project, instanceName)
 	if err != nil {
 		return fmt.Errorf("Error starting admin client. %s", err)
 	}
+	d.Set("instance_name", instanceName)
 
 	defer c.Close()
 
@@ -138,7 +140,7 @@ func resourceBigtableGCPolicyRead(d *schema.ResourceData, meta interface{}) erro
 		return err
 	}
 
-	instanceName := d.Get("instance_name").(string)
+	instanceName := GetResourceNameFromSelfLink(d.Get("instance_name").(string))
 	c, err := config.bigtableClientFactory.NewAdminClient(project, instanceName)
 	if err != nil {
 		return fmt.Errorf("Error starting admin client. %s", err)
@@ -151,7 +153,7 @@ func resourceBigtableGCPolicyRead(d *schema.ResourceData, meta interface{}) erro
 	if err != nil {
 		log.Printf("[WARN] Removing %s because it's gone", name)
 		d.SetId("")
-		return fmt.Errorf("Error retrieving table. Could not find %s in %s. %s", name, instanceName, err)
+		return nil
 	}
 
 	for _, fi := range ti.FamilyInfos {
@@ -175,7 +177,7 @@ func resourceBigtableGCPolicyDestroy(d *schema.ResourceData, meta interface{}) e
 		return err
 	}
 
-	instanceName := d.Get("instance_name").(string)
+	instanceName := GetResourceNameFromSelfLink(d.Get("instance_name").(string))
 	c, err := config.bigtableClientFactory.NewAdminClient(project, instanceName)
 	if err != nil {
 		return fmt.Errorf("Error starting admin client. %s", err)

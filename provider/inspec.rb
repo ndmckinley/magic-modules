@@ -102,6 +102,28 @@ module Provider
         File.join(markdown_target_folder, "#{iam_policy_resource_name}.md"),
         self
       )
+
+      generate_iam_binding(data)
+    end
+
+    # Generate the IAM binding for this object. This is used to query and test
+    # IAM bindings in a more convienient way than using the IAM policy resource
+    def generate_iam_binding(data)
+      target_folder = File.join(data.output_folder, 'libraries')
+
+      iam_binding_resource_name = "#{resource_name(data.object, data.product)}_iam_binding"
+      data.generate(
+        'templates/inspec/iam_binding/iam_binding.erb',
+        File.join(target_folder, "#{iam_binding_resource_name}.rb"),
+        self
+      )
+
+      markdown_target_folder = File.join(data.output_folder, 'docs/resources')
+      data.generate(
+        'templates/inspec/iam_binding/iam_binding.md.erb',
+        File.join(markdown_target_folder, "#{iam_binding_resource_name}.md"),
+        self
+      )
     end
 
     def generate_properties(data, props)
@@ -203,6 +225,10 @@ module Provider
       )
     end
 
+    def generate_resource_sweepers(data)
+      # No generated sweepers for this provider
+    end
+
     def emit_requires(requires)
       requires.flatten.sort.uniq.map { |r| "require '#{r}'" }.join("\n")
     end
@@ -259,13 +285,17 @@ module Provider
     end
 
     def resource_name(object, product)
+      return object.resource_name unless object.resource_name.nil?
+
       "google_#{@config.legacy_name || product.name.underscore}_#{object.name.underscore}"
     end
 
     # Recursively calls itself on any arrays or nested objects within this property, indenting
     # further for each call
     def markdown_format(property, indent = 1)
-      prop_description = "`#{property.out_name}`: #{property.description.split("\n").join(' ')}"
+      beta_description = property.min_version.name == 'beta' ? '(Beta only) ' : ''
+      desc = "#{beta_description}#{property.description.split("\n").join(' ')}"
+      prop_description = "`#{property.out_name}`: #{desc}"
       description = "#{'  ' * indent}* #{prop_description}"
       if nested_object?(property)
         description_arr = [description]
@@ -335,6 +365,24 @@ module Provider
     # Extracts identifiers of a resource in the form {{identifier}} from a url
     def extract_identifiers(url)
       url.scan(/({{)(\w+)(}})/).map { |arr| arr[1] }
+    end
+
+    # Returns if this property has a sub property that is a Time class
+    def time_prop?(property_list = [])
+      property_list.any? { |sub_property| time?(sub_property) }
+    end
+
+    def beta?(object)
+      beta_api_url(object) != ga_api_url(object)
+    end
+
+    def beta_api_url(object)
+      object.product_url || object.__product.base_url
+    end
+
+    def ga_api_url(object)
+      ga_version = object.__product.version_obj_or_closest('ga')
+      object.product_url || ga_version.base_url
     end
   end
 end

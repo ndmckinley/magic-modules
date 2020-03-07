@@ -12,6 +12,7 @@
 # limitations under the License.
 
 require 'provider/abstract_core'
+require 'provider/terraform/async'
 require 'provider/terraform/config'
 require 'provider/terraform/import'
 require 'provider/terraform/custom_code'
@@ -94,7 +95,7 @@ module Provider
 
     def force_new?(property, resource)
       !property.output &&
-        (property.input || (resource.input && property.update_url.nil? &&
+        (property.input || (resource.input && property.update_url.nil? && property.input.nil? &&
                             (property.parent.nil? ||
                              force_new?(property.parent, resource))))
     end
@@ -197,6 +198,27 @@ module Provider
       data.product = data.product.name
       data.resource_name = data.object.name.camelize(:upper)
       data.generate('templates/terraform/examples/base_configs/test_file.go.erb',
+                    filepath, self)
+    end
+
+    def generate_resource_sweepers(data)
+      return if data.object.skip_sweeper ||
+                data.object.custom_code.custom_delete ||
+                data.object.custom_code.pre_delete
+
+      target_folder = File.join(data.output_folder, folder_name(data.version))
+
+      name = data.object.name.underscore
+      product_name = data.product.name.underscore
+      filepath =
+        File.join(
+          target_folder,
+          "resource_#{product_name}_#{name}_sweeper_test.go"
+        )
+
+      data.product = data.product.name
+      data.resource_name = data.object.name.camelize(:upper)
+      data.generate('templates/terraform/sweeper_file.go.erb',
                     filepath, self)
     end
 

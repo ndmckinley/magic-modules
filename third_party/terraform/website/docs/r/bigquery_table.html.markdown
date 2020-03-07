@@ -117,8 +117,17 @@ The following arguments are supported:
     Bigtable, Cloud Datastore backups, and Avro formats when using
     external tables. For more information see the
     [BigQuery API documentation](https://cloud.google.com/bigquery/docs/reference/rest/v2/tables#resource).
+    ~>**NOTE**: Because this field expects a JSON string, any changes to the
+    string will create a diff, even if the JSON itself hasn't changed.
+    If the API returns a different value for the same schema, e.g. it
+    switched the order of values or replaced `STRUCT` field type with `RECORD`
+    field type, we currently cannot suppress the recurring diff this causes.
+    As a workaround, we recommend using the schema as returned by the API.
 
 * `time_partitioning` - (Optional) If specified, configures time-based
+    partitioning for this table. Structure is documented below.
+
+* `range_partitioning` - (Optional, Beta) If specified, configures range-based
     partitioning for this table. Structure is documented below.
 
 * `clustering` - (Optional) Specifies column names to use for data clustering.
@@ -154,7 +163,7 @@ The `external_data_configuration` block supports:
     BigQuery can ignore when reading data.
 
 * `source_format` (Required) - The data format. Supported values are:
-    "CSV", "GOOGLE_SHEETS", "NEWLINE_DELIMITED_JSON", "AVRO",
+    "CSV", "GOOGLE_SHEETS", "NEWLINE_DELIMITED_JSON", "AVRO", "PARQUET",
     and "DATSTORE_BACKUP". To use "GOOGLE_SHEETS"
     the `scopes` must include
     "https://www.googleapis.com/auth/drive.readonly".
@@ -170,7 +179,7 @@ The `csv_options` block supports:
     characters, you must also set the `allow_quoted_newlines` property to true.
     The API-side default is `"`, specified in Terraform escaped as `\"`. Due to
     limitations with Terraform default values, this value is required to be
-    explicitly set. 
+    explicitly set.
 
 * `allow_jagged_rows` (Optional) - Indicates if BigQuery should accept rows
     that are missing trailing optional columns.
@@ -213,6 +222,22 @@ The `time_partitioning` block supports:
 * `require_partition_filter` - (Optional) If set to true, queries over this table
     require a partition filter that can be used for partition elimination to be
     specified.
+
+The `range_partitioning` block supports:
+
+* `field` - (Required) The field used to determine how to create a range-based
+    partition.
+
+* `range` - (Required) Information required to partition based on ranges.
+    Structure is documented below.
+
+The `range` block supports:
+
+* `start` - (Required) Start of the range partitioning, inclusive.
+
+* `end` - (Required) End of the range partitioning, exclusive.
+
+* `interval` - (Required) The width of each range within the partition.
 
 The `view` block supports:
 

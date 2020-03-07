@@ -74,9 +74,9 @@ func <%= resource_name -%>IamUpdaterProducer(d *schema.ResourceData, config *Con
 
 <% resource_params.each do |param| -%>
 <% if provider_default_values.include?(param) -%>
-	<%= param -%>, err := get<%= param.capitalize -%>(d, config)
-	if err != nil {
-		return nil, err
+	<%= param -%>, _ := get<%= param.capitalize -%>(d, config)
+	if <%= param -%> != "" {
+		values["<%= param -%>"] = <%= param -%>
 	}
 	values["<%= param -%>"] = <%= param -%>
 
@@ -129,11 +129,10 @@ func <%= resource_name -%>IdParseFunc(d *schema.ResourceData, config *Config) er
 
 <% resource_params.each do |param| -%>
 <% if provider_default_values.include?(param) -%>
-	<%= param -%>, err := get<%= param.capitalize -%>(d, config)
-	if err != nil {
-		return err
+	<%= param -%>, _ := get<%= param.capitalize -%>(d, config)
+	if <%= param -%> != "" {
+		values["<%= param -%>"] = <%= param -%>
 	}
-	values["<%= param -%>"] = <%= param -%>
 
 <% end # if provider_default_values.include? -%>
 <% end # resource_params.each -%>
@@ -178,19 +177,17 @@ func (u *<%= resource_name -%>IamUpdater) GetResourceIamPolicy() (*cloudresource
 	}
 <% end -%>
 	var obj map[string]interface{}
-<% unless version == 'ga' -%>
-<%   if object.iam_policy.iam_conditions_request_type == :QUERY_PARAM -%>
+<% if object.iam_policy.iam_conditions_request_type == :QUERY_PARAM -%>
 	url, err = addQueryParams(url, map[string]string{"optionsRequestedPolicyVersion": fmt.Sprintf("%d", iamPolicyVersion)})
 	if err != nil {
 		return nil, err
 	}
-<%   elsif object.iam_policy.iam_conditions_request_type == :REQUEST_BODY -%>
+<% elsif object.iam_policy.iam_conditions_request_type == :REQUEST_BODY -%>
 	obj = map[string]interface{}{
 		"options": map[string]interface{}{
 			"requestedPolicyVersion": iamPolicyVersion,
 		},
 	}
-<%    end  -%>
 <%  end -%>
 
 	policy, err := sendRequest(u.Config, "<%= object.iam_policy.fetch_iam_policy_verb.to_s.upcase -%>", <% if resource_params.include?('project')  %>project<% else %>""<% end %>, url, obj<%= object.error_retry_predicates ? ", " + object.error_retry_predicates.join(',') : "" -%>)

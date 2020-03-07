@@ -131,6 +131,9 @@ func resource<%= resource_name -%><%= prop.name.camelize(:upper) -%>SetStyleDiff
 <% end -%>
 
 func resource<%= resource_name -%>Create(d *schema.ResourceData, meta interface{}) error {
+<%  if object.custom_code.custom_create -%>
+    <%= lines(compile(object.custom_code.custom_create))  -%>
+<%  else  -%>
     config := meta.(*Config)
 
     obj := make(map[string]interface{})
@@ -178,6 +181,12 @@ func resource<%= resource_name -%>Create(d *schema.ResourceData, meta interface{
     if err != nil {
         return err
     }
+<%    if object.update_mask -%>
+    url, err = addQueryParams(url, map[string]string{"updateMask": "<%= object.nested_query.keys.join('.') -%>"})
+    if err != nil {
+        return err
+    }
+<%    end -%>
 <%  end -%>
 <%  if has_project -%>
     project, err := getProject(d, config)
@@ -206,27 +215,75 @@ func resource<%= resource_name -%>Create(d *schema.ResourceData, meta interface{
     }
     d.SetId(id)
 
-<%  if !object.async.nil? && object.async.allow?('create') -%>
-<%    if object.async.is_a? Api::PollAsync -%>
-    waitURL, err := replaceVars(d, config, "<%= "{{#{object.__product.name}BasePath}}#{object.self_link_uri}" -%>")
+<%  if object.async&.allow?('create') -%>
+<%    if object.async.is_a? Provider::Terraform::PollAsync -%>
+    err = PollingWaitTime(resource<%= resource_name -%>PollRead(d, meta), <%= object.async.check_response_func -%>, "Creating <%= object.name -%>", d.Timeout(schema.TimeoutCreate))
     if err != nil {
-        return err
-    }
-
-    err = <%= client_name_camel -%>PollingWaitTime(
-    config, res,<% if has_project -%> project, <% end -%> waitURL, "Creating <%= object.name -%>",
-        int(d.Timeout(schema.TimeoutCreate).Minutes()))
-
-    if err != nil {
-<%      if object.custom_code.post_create_failure -%>
+<%      if object.async.suppress_error -%>
+        log.Printf("[ERROR] Unable to confirm eventually consistent <%= object.name -%> %q finished updating: %q", d.Id(), err)
+<%      else -%>
+<%        if object.custom_code.post_create_failure -%>
         resource<%= resource_name -%>PostCreateFailure(d, meta)
-<%      end -%>
+<%        end -%>
         return fmt.Errorf("Error waiting to create <%= object.name -%>: %s", err)
+<%      end -%>
     }
+
 <%    end -%>
 <%    if object.async.is_a? Api::OpAsync -%>
+<%      if object.async.result.resource_inside_response and not object.identity.empty? -%>
+    // Use the resource in the operation response to populate
+    // identity fields and d.Id() before read
+    var opRes map[string]interface{}
+    err = <%= client_name_camel -%>OperationWaitTimeWithResponse(
+    config, res, &opRes, <% if has_project -%> project, <% end -%> "Creating <%= object.name -%>",
+        int(d.Timeout(schema.TimeoutCreate).Minutes()))
+    if err != nil {
+<%        if object.custom_code.post_create_failure -%>
+        resource<%= resource_name -%>PostCreateFailure(d, meta)
+<%        end -%>
+        // The resource didn't actually create
+        d.SetId("")
+        return fmt.Errorf("Error waiting to create <%= object.name -%>: %s", err)
+    }
+
+<%      if object.nested_query -%>
+    opRes, err = flattenNested<%= resource_name -%>(d, meta, opRes)
+    if err != nil {
+        return fmt.Errorf("Error getting nested object from operation response: %s", err)
+    }
+    if opRes == nil {
+        // Object isn't there any more - remove it from the state.
+        return fmt.Errorf("Error decoding response from operation, could not find nested object")
+    }
+<%      end -%>
+<%      if object.custom_code.decoder -%>
+    opRes, err = resource<%= resource_name -%>Decoder(d, meta, opRes)
+    if err != nil {
+        return fmt.Errorf("Error decoding response from operation: %s", err)
+    }
+    if opRes == nil {
+        return fmt.Errorf("Error decoding response from operation, could not find object")
+    }
+<%      end -%>
+    <% object.gettable_properties.each do |prop| -%>
+    <% if object.identity.include?(prop) -%>
+    if err := d.Set("<%= prop.name.underscore -%>", flatten<%= resource_name -%><%= titlelize_property(prop) -%>(opRes["<%= prop.api_name -%>"], d, config)); err != nil {
+        return err
+    }
+    <% end -%>
+    <% end -%>
+
+    // This may have caused the ID to update - update it if so.
+    id, err = replaceVars(d, config, "<%= id_format(object) -%>")
+    if err != nil {
+        return fmt.Errorf("Error constructing id: %s", err)
+    }
+    d.SetId(id)
+
+    <% else -%>
     err = <%= client_name_camel -%>OperationWaitTime(
-    config, res,<% if has_project -%> project, <% end -%> "Creating <%= object.name -%>",
+    config, res, <% if has_project -%> project, <% end -%> "Creating <%= object.name -%>",
         int(d.Timeout(schema.TimeoutCreate).Minutes()))
 
     if err != nil {
@@ -237,7 +294,9 @@ func resource<%= resource_name -%>Create(d *schema.ResourceData, meta interface{
         d.SetId("")
         return fmt.Errorf("Error waiting to create <%= object.name -%>: %s", err)
     }
+
 <%    end -%>
+<%  end -%>
 <%  end -%>
 
     log.Printf("[DEBUG] Finished creating <%= object.name -%> %q: %#v", d.Id(), res)
@@ -245,7 +304,72 @@ func resource<%= resource_name -%>Create(d *schema.ResourceData, meta interface{
 <%= lines(compile(object.custom_code.post_create)) if object.custom_code.post_create -%>
 
     return resource<%= resource_name -%>Read(d, meta)
+<%  end # if custom_create  -%>
 }
+
+<%  if object.async&.is_a? Provider::Terraform::PollAsync -%>
+func resource<%= resource_name -%>PollRead(d *schema.ResourceData, meta interface{}) PollReadFunc {
+    return func() (map[string]interface{}, error) {
+<%    if object.async.custom_poll_read -%>
+<%= lines(compile(object.async.custom_poll_read)) -%>
+<%    else -%>
+        config := meta.(*Config)
+
+        url, err := replaceVars(d, config, "<%= "{{#{object.__product.name}BasePath}}#{object.self_link_uri}" -%>")
+        if err != nil {
+            return nil, err
+        }
+
+    <%  if has_project -%>
+        project, err := getProject(d, config)
+        if err != nil {
+            return nil, err
+        }
+    <%  end -%>
+    <%  if object.supports_indirect_user_project_override -%>
+        var project string
+        if parts := regexp.MustCompile(`projects\/([^\/]+)\/`).FindStringSubmatch(url); parts != nil {
+            project = parts[1]
+        }
+    <%  end -%>
+        res, err := sendRequest(config, "<%= object.read_verb.to_s.upcase -%>", <% if has_project || object.supports_indirect_user_project_override %>project<% else %>""<% end %>, url, nil<%= object.error_retry_predicates ? ", " + object.error_retry_predicates.join(',') : "" -%>)
+        if err != nil {
+            return res, err
+        }
+    <%  if object.nested_query -%>
+        res, err = flattenNested<%= resource_name -%>(d, meta, res)
+        if err != nil {
+            return nil, err
+        }
+
+        if res == nil {
+            // Nested object not found, spoof a 404 error for poll
+            return nil, &googleapi.Error{
+                Code: 404,
+                Message: "nested object <%= resource_name%> not found",
+            }
+        }
+
+    <%  end -%>
+    <%  if object.custom_code.decoder -%>
+        res, err = resource<%= resource_name -%>Decoder(d, meta, res)
+        if err != nil {
+            return nil, err
+        }
+        if res == nil {
+            // Decoded object not found, spoof a 404 error for poll
+            return nil, &googleapi.Error{
+                Code: 404,
+                Message: "could not find object <%= resource_name%>",
+            }
+        }
+
+    <%  end -%>
+        return res, nil
+<%    end # ifelse object.async.custom_poll_read -%>
+    }
+}
+<%  end -%>
 
 func resource<%= resource_name -%>Read(d *schema.ResourceData, meta interface{}) error {
     config := meta.(*Config)
@@ -284,15 +408,7 @@ func resource<%= resource_name -%>Read(d *schema.ResourceData, meta interface{})
         d.SetId("")
         return nil
     }
-<%  end -%>
 
-<%- unless object.virtual_fields.empty? -%>
-  // Explicitly set virtual fields to default values if unset
-<%-   object.virtual_fields.each do |field| -%>
-    if _, ok := d.GetOk("<%= field.name -%>"); !ok {
-      d.Set("<%= field.name -%>", false)
-    }
-<%    end -%>
 <%  end -%>
 
 <%  if object.custom_code.decoder -%>
@@ -307,8 +423,16 @@ func resource<%= resource_name -%>Read(d *schema.ResourceData, meta interface{})
         d.SetId("")
         return nil
     }
-<%  end -%>
 
+<%  end -%>
+<%- unless object.virtual_fields.empty? -%>
+  // Explicitly set virtual fields to default values if unset
+<%-   object.virtual_fields.each do |field| -%>
+    if _, ok := d.GetOk("<%= field.name -%>"); !ok {
+      d.Set("<%= field.name -%>", false)
+    }
+<%    end -%>
+<%  end -%>
 <%  if has_project -%>
     if err := d.Set("project", project); err != nil {
         return fmt.Errorf("Error reading <%= object.name -%>: %s", err)
@@ -329,7 +453,7 @@ func resource<%= resource_name -%>Read(d *schema.ResourceData, meta interface{})
 <%    if prop.flatten_object -%>
 // Terraform must set the top level schema field, but since this object contains collapsed properties
 // it's difficult to know what the top level should be. Instead we just loop over the map returned from flatten.
-    if flattenedProp := flatten<%= resource_name -%><%= titlelize_property(prop) -%>(res["<%= prop.api_name -%>"], d); flattenedProp != nil {
+    if flattenedProp := flatten<%= resource_name -%><%= titlelize_property(prop) -%>(res["<%= prop.api_name -%>"], d, config); flattenedProp != nil {
         casted := flattenedProp.([]interface{})[0]
         if casted != nil {
             for k, v := range casted.(map[string]interface{}) {
@@ -338,7 +462,7 @@ func resource<%= resource_name -%>Read(d *schema.ResourceData, meta interface{})
         }
     }
 <%    else -%>
-    if err := d.Set("<%= prop.name.underscore -%>", flatten<%= resource_name -%><%= titlelize_property(prop) -%>(res["<%= prop.api_name -%>"], d)); err != nil {
+    if err := d.Set("<%= prop.name.underscore -%>", flatten<%= resource_name -%><%= titlelize_property(prop) -%>(res["<%= prop.api_name -%>"], d, config)); err != nil {
         return fmt.Errorf("Error reading <%= object.name -%>: %s", err)
     }
 <%    end -%>
@@ -415,10 +539,12 @@ if <%= props.map { |prop| "d.HasChange(\"#{prop.name.underscore}\")" }.join ' ||
             `NullFields` is a special case of `send_empty_value` where the empty value
             in question is go's literal nil.
 -%>
-<%          unless prop.send_empty_value -%>
-        } else if v, ok := d.GetOkExists("<%= prop.name.underscore -%>"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, <%= prop.api_name -%>Prop)) {
-<%          else -%>
+<%          if prop.send_empty_value -%>
         } else if v, ok := d.GetOkExists("<%= prop.name.underscore -%>"); ok || !reflect.DeepEqual(v, <%= prop.api_name -%>Prop) {
+<%          elsif prop.flatten_object -%>
+        } else if !isEmptyValue(reflect.ValueOf(<%= prop.api_name -%>Prop)) {
+<%          else -%>
+        } else if v, ok := d.GetOkExists("<%= prop.name.underscore -%>"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, <%= prop.api_name -%>Prop)) {
 <%          end -%>
             obj["<%= prop.api_name -%>"] = <%= prop.api_name -%>Prop
         }
@@ -443,37 +569,33 @@ if <%= props.map { |prop| "d.HasChange(\"#{prop.name.underscore}\")" }.join ' ||
             project = parts[1]
         }
 <%      end -%>
-<%      if object.async.nil? -%>
-        _, err = sendRequestWithTimeout(config, "<%= key[:update_verb] -%>", <% if has_project || object.supports_indirect_user_project_override %>project<% else %>""<% end %>, url, obj, d.Timeout(schema.TimeoutUpdate)<%= object.error_retry_predicates ? ", " + object.error_retry_predicates.join(',') : "" -%>)
-<%      else -%>
+<%      if object.async.is_a? Api::OpAsync-%>
         res, err := sendRequestWithTimeout(config, "<%= key[:update_verb] -%>", <% if has_project || object.supports_indirect_user_project_override %>project<% else %>""<% end %>, url, obj, d.Timeout(schema.TimeoutUpdate)<%= object.error_retry_predicates ? ", " + object.error_retry_predicates.join(',') : "" -%>)
+<%      else -%>
+        _, err = sendRequestWithTimeout(config, "<%= key[:update_verb] -%>", <% if has_project || object.supports_indirect_user_project_override %>project<% else %>""<% end %>, url, obj, d.Timeout(schema.TimeoutUpdate)<%= object.error_retry_predicates ? ", " + object.error_retry_predicates.join(',') : "" -%>)
 <%      end -%>
         if err != nil {
             return fmt.Errorf("Error updating <%= object.name -%> %q: %s", d.Id(), err)
         }
 
-<%      if !object.async.nil? && object.async.allow?('update') -%>
-<%        if object.async.is_a? Api::PollAsync -%>
-        waitURL, err := replaceVars(d, config, "<%= "{{#{object.__product.name}BasePath}}#{object.self_link_uri}" -%>")
-        if err != nil {
-            return err
-        }
-
-        err = <%= client_name_camel -%>PollingWaitTime(
-            config, res, <% if has_project -%> project, <% end -%> waitURL, "Updating <%= object.name -%>",
-            int(d.Timeout(schema.TimeoutUpdate).Minutes()))
-        if err != nil {
-            return err
-        }
-<%        end -%>
-<%        if object.async.is_a? Api::OpAsync -%>
+<%      if object.async&.allow?('update') -%>
+<%          if object.async.is_a? Api::OpAsync-%>
         err = <%= client_name_camel -%>OperationWaitTime(
             config, res, <% if has_project -%> project, <% end -%> "Updating <%= object.name -%>",
             int(d.Timeout(schema.TimeoutUpdate).Minutes()))
         if err != nil {
             return err
         }
-<%        end -%>
+<%          elsif object.async.is_a? Provider::Terraform::PollAsync -%>
+        err = PollingWaitTime(resource<%= resource_name -%>PollRead(d, meta), <%= object.async.check_response_func -%>, "Updating <%= object.name -%>", d.Timeout(schema.TimeoutUpdate))
+        if err != nil {
+<%              if object.async.suppress_error-%>
+        log.Printf("[ERROR] Unable to confirm eventually consistent <%= object.name -%> %q finished updating: %q", d.Id(), err)
+<%              else -%>
+        return err
+<%              end -%>
+        }
+<%          end -%>
 <%      end -%>
 
 <%      props.each do |prop|    -%>
@@ -491,10 +613,12 @@ if <%= props.map { |prop| "d.HasChange(\"#{prop.name.underscore}\")" }.join ' ||
     <%= prop.api_name -%>Prop, err := expand<%= resource_name -%><%= titlelize_property(prop) -%>(<%= schemaPrefix -%>, d, config)
     if err != nil {
         return err
-<%      unless prop.send_empty_value -%>
-    } else if v, ok := d.GetOkExists("<%= prop.name.underscore -%>"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, <%= prop.api_name -%>Prop)) {
-<%      else -%>
+<%      if prop.send_empty_value -%>
     } else if v, ok := d.GetOkExists("<%= prop.name.underscore -%>"); ok || !reflect.DeepEqual(v, <%= prop.api_name -%>Prop) {
+<%      elsif prop.flatten_object -%>
+    } else if !isEmptyValue(reflect.ValueOf(<%= prop.api_name -%>Prop)) {
+<%      else -%>
+    } else if v, ok := d.GetOkExists("<%= prop.name.underscore -%>"); !isEmptyValue(reflect.ValueOf(v)) && (ok || !reflect.DeepEqual(v, <%= prop.api_name -%>Prop)) {
 <%      end -%>
         obj["<%= prop.api_name -%>"] = <%= prop.api_name -%>Prop
     }
@@ -543,31 +667,17 @@ if <%= props.map { |prop| "d.HasChange(\"#{prop.name.underscore}\")" }.join ' ||
         project = parts[1]
     }
 <%  end -%>
-<%  if object.async.nil? -%>
-    _, err = sendRequestWithTimeout(config, "<%= object.update_verb -%>", <% if has_project || object.supports_indirect_user_project_override %>project<% else %>""<% end %>, url, obj, d.Timeout(schema.TimeoutUpdate)<%= object.error_retry_predicates ? ", " + object.error_retry_predicates.join(',') : "" -%>)
-<%  else -%>
+<%  if object.async.is_a? Api::OpAsync-%>
     res, err := sendRequestWithTimeout(config, "<%= object.update_verb -%>", <% if has_project || object.supports_indirect_user_project_override %>project<% else %>""<% end %>, url, obj, d.Timeout(schema.TimeoutUpdate)<%= object.error_retry_predicates ? ", " + object.error_retry_predicates.join(',') : "" -%>)
-<% end -%>
+<%  else -%>
+    _, err = sendRequestWithTimeout(config, "<%= object.update_verb -%>", <% if has_project || object.supports_indirect_user_project_override %>project<% else %>""<% end %>, url, obj, d.Timeout(schema.TimeoutUpdate)<%= object.error_retry_predicates ? ", " + object.error_retry_predicates.join(',') : "" -%>)
+<%  end -%>
 
     if err != nil {
-    return fmt.Errorf("Error updating <%= object.name -%> %q: %s", d.Id(), err)
+        return fmt.Errorf("Error updating <%= object.name -%> %q: %s", d.Id(), err)
     }
 
-<%  if !object.async.nil? && object.async.allow?('update') -%>
-<%    if object.async.is_a? Api::PollAsync -%>
-    waitURL, err := replaceVars(d, config, "<%= "{{#{object.__product.name}BasePath}}#{object.self_link_uri}" -%>")
-    if err != nil {
-        return err
-    }
-
-    err = <%= client_name_camel -%>PollingWaitTime(
-        config, res, <% if has_project -%> project, <% end -%> waitURL, "Updating <%= object.name -%>",
-        int(d.Timeout(schema.TimeoutUpdate).Minutes()))
-
-    if err != nil {
-        return err
-    }
-<%    end -%>
+<%  if object.async&.allow?('update') -%>
 <%    if object.async.is_a? Api::OpAsync -%>
     err = <%= client_name_camel -%>OperationWaitTime(
         config, res, <% if has_project -%> project, <% end -%> "Updating <%= object.name -%>",
@@ -575,6 +685,15 @@ if <%= props.map { |prop| "d.HasChange(\"#{prop.name.underscore}\")" }.join ' ||
 
     if err != nil {
         return err
+    }
+<%    elsif object.async.is_a? Provider::Terraform::PollAsync -%>
+    err = PollingWaitTime(resource<%= resource_name -%>PollRead(d, meta), <%= object.async.check_response_func -%>, "Updating <%= object.name -%>", d.Timeout(schema.TimeoutUpdate))
+    if err != nil {
+<%      if object.async.suppress_error-%>
+        log.Printf("[ERROR] Unable to confirm eventually consistent <%= object.name -%> %q finished updating: %q", d.Id(), err)
+<%      else -%>
+        return err
+<%      end -%>
     }
 <%    end -%>
 <%  end -%>
@@ -621,6 +740,12 @@ func resource<%= resource_name -%>Delete(d *schema.ResourceData, meta interface{
     if err != nil {
         return handleNotFoundError(err, d, "<%= object.name -%>")
     }
+<%    if object.update_mask -%>
+    url, err = addQueryParams(url, map[string]string{"updateMask": "<%= object.nested_query.keys.join('.') -%>"})
+    if err != nil {
+        return err
+    }
+<%    end -%>
 <%  end -%>
 <%  if object.supports_indirect_user_project_override -%>
     var project string
@@ -635,8 +760,7 @@ func resource<%= resource_name -%>Delete(d *schema.ResourceData, meta interface{
         return handleNotFoundError(err, d, "<%= object.name -%>")
     }
 
-<%  if !object.async.nil? && object.async.allow?('delete') -%>
-
+<%  if object.async&.allow?('delete') -%>
     err = <%= client_name_camel -%>OperationWaitTime(
         config, res, <% if has_project -%> project, <% end -%> "Deleting <%= object.name -%>",
         int(d.Timeout(schema.TimeoutDelete).Minutes()))
@@ -644,6 +768,7 @@ func resource<%= resource_name -%>Delete(d *schema.ResourceData, meta interface{
     if err != nil {
         return err
     }
+
 <%  end -%>
 
     log.Printf("[DEBUG] Finished deleting <%= object.name -%> %q: %#v", d.Id(), res)
@@ -727,3 +852,4 @@ func resource<%= resource_name -%>PostCreateFailure(d *schema.ResourceData, meta
 <% if object.schema_version -%>
 <%= lines(compile("templates/terraform/state_migrations/#{product_ns.underscore}_#{object.name.underscore}.go.erb")) -%>
 <%  end -%>
+

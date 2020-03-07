@@ -17,7 +17,7 @@ display_name: Cloud SQL
 versions:
   - !ruby/object:Api::Product::Version
     name: ga
-    base_url: https://www.googleapis.com/sql/v1beta4/
+    base_url: https://sqladmin.googleapis.com/sql/v1beta4/
 scopes:
   - https://www.googleapis.com/auth/sqlservice.admin
 apis_required:
@@ -395,7 +395,26 @@ objects:
               update method to make sure concurrent updates are handled properly. 
               During update, use the most recent settingsVersion value for this 
               instance and do not try to update this value.
-      # TODO(nelsonjr): Add missing properties such as state.
+      - !ruby/object:Api::Type::String
+        name: 'gceZone'
+        output: true
+        description: |
+          The Compute Engine zone that the instance is currently serving from. This value could be
+          different from the zone that was specified when the instance was created if the instance
+          has failed over to its secondary zone.
+      - !ruby/object:Api::Type::Enum
+        name: 'state'
+        output: true
+        description: |
+          The current serving state of the database instance.
+        values:
+          - :SQL_INSTANCE_STATE_UNSPECIFIED
+          - :RUNNABLE
+          - :SUSPENDED
+          - :PENDING_DELETE
+          - :PENDING_CREATE
+          - :MAINTENANCE
+          - :FAILED
   - !ruby/object:Api::Resource
     name: 'Database'
     kind: 'sql#database'
@@ -610,6 +629,54 @@ objects:
         item_type: Api::Type::String
         description: 'The applicable regions for this tier.'
         output: true
+  - !ruby/object:Api::Resource
+    name: 'SourceRepresentationInstance'
+    kind: 'sql#instance'
+    description: |
+      A source representation instance is a Cloud SQL instance that represents
+      the source database server to the Cloud SQL replica. It is visible in the
+      Cloud Console and appears the same as a regular Cloud SQL instance, but it
+      contains no data, requires no configuration or maintenance, and does not
+      affect billing. You cannot update the source representation instance.
+    base_url: projects/{{project}}/instances
+    input: true
+    properties:
+      - !ruby/object:Api::Type::String
+        name: 'name'
+        description: |
+            The name of the source representation instance. Use any valid Cloud SQL instance name.
+        required: true
+      - !ruby/object:Api::Type::String
+        name: 'region'
+        description: |
+          The region where you want your Cloud SQL replicas to reside.
+        required: true
+      - !ruby/object:Api::Type::Enum
+        name: 'databaseVersion'
+        description: |
+          The MySQL version running on your source database server: MYSQL_5_6 or MYSQL_5_7.
+        required: true
+        values:
+          - :MYSQL_5_6
+          - :MYSQL_5_7
+      - !ruby/object:Api::Type::NestedObject
+        name: 'onPremisesConfiguration'
+        description: |
+          Configuration specific to on-premises instances.
+        required: true
+        properties:
+          - !ruby/object:Api::Type::String
+            name: 'host'
+            description: |
+              The externally accessible IPv4 address for the source database server.
+            required: true
+          - !ruby/object:Api::Type::Integer
+            name: 'port'
+            default_value: 3306
+            description: |
+              The externally accessible port for the source database server.
+              Defaults to 3306.
+
   # 'Operation' is not idempotent and will not be covered.
   # (it is used internally to assert the state of operations being performed)
   # | - !ruby/object:Api::Resource
